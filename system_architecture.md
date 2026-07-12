@@ -39,24 +39,24 @@ Protocol Zero is a **community-driven incident reporting and emergency response 
 
 ### 1.2 Goals
 
-| Goal | Description |
-|---|---|
-| Speed | Reduce the time between "incident occurs" and "help is notified" to seconds. |
-| Trust | Prevent misuse through reliability scoring, voting, and fake-report detection. |
-| Coverage | Work in low-connectivity regions via lightweight payloads and offline-first client design. |
+| Goal         | Description                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| Speed        | Reduce the time between "incident occurs" and "help is notified" to seconds.                |
+| Trust        | Prevent misuse through reliability scoring, voting, and fake-report detection.              |
+| Coverage     | Work in low-connectivity regions via lightweight payloads and offline-first client design.  |
 | Coordination | Give Volunteers and Response Teams a single source of truth for active incidents near them. |
-| Transparency | Give every user an auditable history of reports, votes, and resolutions. |
+| Transparency | Give every user an auditable history of reports, votes, and resolutions.                    |
 
 ### 1.3 Main Users
 
-| Role | Description |
-|---|---|
-| **Normal User** | Can view nearby reports, vote, comment, and file reports. |
-| **Reporter** | A normal user who has filed one or more verified reports; unlocked reputation-based privileges. |
-| **Volunteer** | Verified individual who opts in to respond physically to nearby incidents. |
+| Role              | Description                                                                                                                   |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Normal User**   | Can view nearby reports, vote, comment, and file reports.                                                                     |
+| **Reporter**      | A normal user who has filed one or more verified reports; unlocked reputation-based privileges.                               |
+| **Volunteer**     | Verified individual who opts in to respond physically to nearby incidents.                                                    |
 | **Response Team** | Organized units (e.g., fire service liaison, medical first-responders, community security) with elevated dispatch visibility. |
-| **Admin** | Manages a region — verifies reports, manages users, and oversees Volunteers/Response Teams. |
-| **Super Admin** | Full system control — manages Admins, global configuration, and platform-wide moderation. |
+| **Admin**         | Manages a region — verifies reports, manages users, and oversees Volunteers/Response Teams.                                   |
+| **Super Admin**   | Full system control — manages Admins, global configuration, and platform-wide moderation.                                     |
 
 ### 1.4 Core Workflow
 
@@ -143,13 +143,13 @@ flowchart TB
 
 ### 2.2 Layer Responsibilities
 
-| Layer | Responsibility |
-|---|---|
-| **Client Layer** | Rendering, local state, optimistic UI, map visualization, socket subscriptions. |
-| **API Layer** | Request entry point, authentication middleware, rate limiting, routing. |
-| **Business Logic Layer** | Controllers (thin, HTTP-only) → Services (core logic) → Repositories (data access abstraction). |
-| **Database Layer** | MongoDB collections, indexes, schema validation via Mongoose. |
-| **External Services** | Anything outside the app's control boundary — media storage, SMS/email/push, maps, identity verification. |
+| Layer                    | Responsibility                                                                                            |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- |
+| **Client Layer**         | Rendering, local state, optimistic UI, map visualization, socket subscriptions.                           |
+| **API Layer**            | Request entry point, authentication middleware, rate limiting, routing.                                   |
+| **Business Logic Layer** | Controllers (thin, HTTP-only) → Services (core logic) → Repositories (data access abstraction).           |
+| **Database Layer**       | MongoDB collections, indexes, schema validation via Mongoose.                                             |
+| **External Services**    | Anything outside the app's control boundary — media storage, SMS/email/push, maps, identity verification. |
 
 ### 2.3 Request Lifecycle
 
@@ -225,18 +225,18 @@ client/
 
 **Folder responsibilities:**
 
-| Folder | Responsibility |
-|---|---|
-| `api/` | All Axios calls. No component ever calls `axios` directly. |
-| `components/` | Presentation-only, no business/Redux logic beyond props. |
-| `features/` | Domain-driven slices — each owns its Redux slice, hooks, and feature-specific components. |
-| `hooks/` | Cross-cutting reusable logic (auth state, geolocation, socket subscription). |
-| `layouts/` | Shared page chrome (nav, sidebar) wrapping route pages. |
-| `redux/` | Store configuration only; slices live inside `features/`. |
-| `routes/` | Centralized route table + guards (`<PrivateRoute>`, `<RoleRoute allow={['admin']}>`). |
-| `context/` | React Context providers for cross-tree concerns (sockets, theme). |
-| `utils/` | Pure functions, no side effects. |
-| `constants/` | Single source of truth for enums (roles, report status, categories). |
+| Folder        | Responsibility                                                                            |
+| ------------- | ----------------------------------------------------------------------------------------- |
+| `api/`        | All Axios calls. No component ever calls `axios` directly.                                |
+| `components/` | Presentation-only, no business/Redux logic beyond props.                                  |
+| `features/`   | Domain-driven slices — each owns its Redux slice, hooks, and feature-specific components. |
+| `hooks/`      | Cross-cutting reusable logic (auth state, geolocation, socket subscription).              |
+| `layouts/`    | Shared page chrome (nav, sidebar) wrapping route pages.                                   |
+| `redux/`      | Store configuration only; slices live inside `features/`.                                 |
+| `routes/`     | Centralized route table + guards (`<PrivateRoute>`, `<RoleRoute allow={['admin']}>`).     |
+| `context/`    | React Context providers for cross-tree concerns (sockets, theme).                         |
+| `utils/`      | Pure functions, no side effects.                                                          |
+| `constants/`  | Single source of truth for enums (roles, report status, categories).                      |
 
 ### 3.2 Server (`/server`)
 
@@ -302,16 +302,16 @@ server/
 
 **Folder responsibilities:**
 
-| Folder | Responsibility |
-|---|---|
-| `controllers/` | Parse request, call service, format response. No DB/business logic. |
-| `services/` | All business rules (escalation logic, reliability scoring, fake detection). |
+| Folder          | Responsibility                                                                       |
+| --------------- | ------------------------------------------------------------------------------------ |
+| `controllers/`  | Parse request, call service, format response. No DB/business logic.                  |
+| `services/`     | All business rules (escalation logic, reliability scoring, fake detection).          |
 | `repositories/` | Only place that talks to Mongoose models directly — enables swapping DB layer later. |
-| `models/` | Schema + validation + indexes only. |
-| `middleware/` | Cross-cutting request handling. |
-| `validators/` | Input schema validation, kept separate from business validation. |
-| `jobs/` | Scheduled/background tasks (escalation timeouts, OTP expiry cleanup). |
-| `socket/` | All real-time event definitions, isolated from REST controllers. |
+| `models/`       | Schema + validation + indexes only.                                                  |
+| `middleware/`   | Cross-cutting request handling.                                                      |
+| `validators/`   | Input schema validation, kept separate from business validation.                     |
+| `jobs/`         | Scheduled/background tasks (escalation timeouts, OTP expiry cleanup).                |
+| `socket/`       | All real-time event definitions, isolated from REST controllers.                     |
 
 ---
 
@@ -322,6 +322,7 @@ server/
 Instead of separate `Volunteer`, `Reporter`, `ResponseTeam`, and `Admin` collections, Protocol Zero uses **one `User` collection with a `role` field and role-specific embedded/linked profile data**.
 
 **Why:**
+
 - A person can transition between roles (Normal User → Reporter → Volunteer) without duplicating identity, auth, and trust-score data across collections.
 - Authentication, sessions, refresh tokens, and reliability score are role-agnostic — duplicating them per collection would violate DRY and complicate JWT claims.
 - Role-specific extra fields (e.g., Volunteer's `skills`, Response Team's `unitType`) are modeled as an optional embedded sub-document (`roleProfile`) rather than a separate collection, since they are 1:1 with the user and queried together with the user almost always.
@@ -422,7 +423,7 @@ erDiagram
     enum: ['fire', 'accident', 'crime', 'medical', 'flood', 'natural_disaster', 'public_hazard', 'other'],
     required: true
   },
-  severity:      { type: String, enum: ['minor', 'major', 'critical'], required: true },
+  severity:      { type: String, enum: ['minor', 'major'], required: true },
   status: {
     type: String,
     enum: ['pending', 'verified', 'escalated', 'in_progress', 'resolved', 'rejected', 'false_report'],
@@ -598,12 +599,12 @@ sequenceDiagram
     participant C as Client
     participant API as Auth API
     participant DB as MongoDB
-    participant SMS as SMS/Email Gateway
+    participant EMAIL as Email Gateway
 
     C->>API: POST /auth/register {fullName, email, phone, password}
     API->>DB: Create user (isVerified=false)
-    API->>SMS: Send OTP
-    API-->>C: 201 {message: "OTP sent"}
+    API->>EMAIL: Send OTP
+    API-->>C: 201 {message: "OTP sent to email"}
 
     C->>API: POST /auth/verify-otp {phone, code}
     API->>DB: Validate OTP, mark isVerified=true
@@ -632,19 +633,19 @@ sequenceDiagram
 
 ### 5.2 Step-by-Step Explanation
 
-| Step | Detail |
-|---|---|
-| **Registration** | Validates unique email/phone, hashes password with bcrypt (cost factor 12), creates user with `isVerified: false`. |
-| **OTP Verification** | 6-digit numeric OTP, 5-minute expiry (TTL-indexed), max 5 verification attempts, resend cooldown of 60s. |
-| **Login** | On success, resets `failedLoginAttempts` to 0. On failure, increments counter; at 5 failures, `isLocked = true` with a 15-minute `lockUntil`. |
-| **JWT** | Access token: 15-minute expiry, signed with `JWT_ACCESS_SECRET`, contains `{ userId, role, permissions }`. Never stores sensitive data. |
-| **Refresh Token** | 7–30 day expiry (configurable "remember me"), stored **httpOnly, secure, sameSite=strict** cookie. Server stores only a **hash** of it, enabling revocation without ever exposing the raw token in the DB. Rotated on every use (old token revoked, new one issued) to detect token theft. |
-| **Logout** | Revokes the specific refresh token and marks the `UserSession` inactive. "Logout all devices" revokes all tokens for the user. |
-| **Password Reset** | OTP-based (not link-based, to keep parity with phone-first UX) — request → verify OTP → set new password → revoke all existing refresh tokens. |
-| **Account Lock** | Auto-unlocks after `lockUntil` passes; Admin can manually unlock. |
-| **Rate Limiting** | `/auth/login` and `/auth/register` limited to 10 requests / 15 min per IP via `express-rate-limit`; OTP endpoints limited to 5 requests / 10 min per phone number. |
-| **Face Verification (placeholder)** | `POST /auth/face-verification` accepts a selfie, stores to Cloudinary, sets `faceVerification.status = 'pending'`. Actual matching wired to a third-party liveness/face-match API (e.g., AWS Rekognition or a local vendor) — stubbed as an async job until vendor is selected. |
-| **NID Verification (placeholder)** | `POST /auth/nid-verification` accepts NID number + document image. Currently stores as `pending`; hook point reserved for a national ID verification API integration. Field is `select: false` by default to avoid ever leaking NID numbers in normal queries. |
+| Step                                | Detail                                                                                                                                                                                                                                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Registration**                    | Validates unique email/phone, hashes password with bcrypt (cost factor 12), creates user with `isVerified: false`.                                                                                                                                                                         |
+| **OTP Verification**                | 6-digit numeric OTP, 5-minute expiry (TTL-indexed), max 5 verification attempts, resend cooldown of 60s.                                                                                                                                                                                   |
+| **Login**                           | On success, resets `failedLoginAttempts` to 0. On failure, increments counter; at 5 failures, `isLocked = true` with a 15-minute `lockUntil`.                                                                                                                                              |
+| **JWT**                             | Access token: 15-minute expiry, signed with `JWT_ACCESS_SECRET`, contains `{ userId, role, permissions }`. Never stores sensitive data.                                                                                                                                                    |
+| **Refresh Token**                   | 7–30 day expiry (configurable "remember me"), stored **httpOnly, secure, sameSite=strict** cookie. Server stores only a **hash** of it, enabling revocation without ever exposing the raw token in the DB. Rotated on every use (old token revoked, new one issued) to detect token theft. |
+| **Logout**                          | Revokes the specific refresh token and marks the `UserSession` inactive. "Logout all devices" revokes all tokens for the user.                                                                                                                                                             |
+| **Password Reset**                  | OTP-based (not link-based, to keep parity with phone-first UX) — request → verify OTP → set new password → revoke all existing refresh tokens.                                                                                                                                             |
+| **Account Lock**                    | Auto-unlocks after `lockUntil` passes; Admin can manually unlock.                                                                                                                                                                                                                          |
+| **Rate Limiting**                   | `/auth/login` and `/auth/register` limited to 10 requests / 15 min per IP via `express-rate-limit`; OTP endpoints limited to 5 requests / 10 min per phone number.                                                                                                                         |
+| **Face Verification (placeholder)** | `POST /auth/face-verification` accepts a selfie, stores to Cloudinary, sets `faceVerification.status = 'pending'`. Actual matching wired to a third-party liveness/face-match API (e.g., AWS Rekognition or a local vendor) — stubbed as an async job until vendor is selected.            |
+| **NID Verification (placeholder)**  | `POST /auth/nid-verification` accepts NID number + document image. Currently stores as `pending`; hook point reserved for a national ID verification API integration. Field is `select: false` by default to avoid ever leaking NID numbers in normal queries.                             |
 
 ---
 
@@ -652,21 +653,21 @@ sequenceDiagram
 
 ### 6.1 Permission Matrix
 
-| Action | User | Reporter | Volunteer | Response Team | Admin | Super Admin |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| View nearby reports | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Create report | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Vote / comment | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Activate Victim Mode | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Receive escalation alerts | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Acknowledge / respond to report | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Change report status | ❌ | ❌ | ✅ (limited) | ✅ | ✅ | ✅ |
-| Allocate resources | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Verify / reject reports | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Manage users (lock/unlock/verify NID) | ❌ | ❌ | ❌ | ❌ | ✅ (region) | ✅ (global) |
-| Promote/demote roles | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| View audit logs | ❌ | ❌ | ❌ | ❌ | ✅ (region) | ✅ (global) |
-| System configuration | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Action                                | User | Reporter |  Volunteer   | Response Team |    Admin    | Super Admin |
+| ------------------------------------- | :--: | :------: | :----------: | :-----------: | :---------: | :---------: |
+| View nearby reports                   |  ✅  |    ✅    |      ✅      |      ✅       |     ✅      |     ✅      |
+| Create report                         |  ✅  |    ✅    |      ✅      |      ✅       |     ✅      |     ✅      |
+| Vote / comment                        |  ✅  |    ✅    |      ✅      |      ✅       |     ✅      |     ✅      |
+| Activate Victim Mode                  |  ✅  |    ✅    |      ✅      |      ✅       |     ✅      |     ✅      |
+| Receive escalation alerts             |  ❌  |    ❌    |      ✅      |      ✅       |     ✅      |     ✅      |
+| Acknowledge / respond to report       |  ❌  |    ❌    |      ✅      |      ✅       |     ✅      |     ✅      |
+| Change report status                  |  ❌  |    ❌    | ✅ (limited) |      ✅       |     ✅      |     ✅      |
+| Allocate resources                    |  ❌  |    ❌    |      ❌      |      ✅       |     ✅      |     ✅      |
+| Verify / reject reports               |  ❌  |    ❌    |      ❌      |      ❌       |     ✅      |     ✅      |
+| Manage users (lock/unlock/verify NID) |  ❌  |    ❌    |      ❌      |      ❌       | ✅ (region) | ✅ (global) |
+| Promote/demote roles                  |  ❌  |    ❌    |      ❌      |      ❌       |     ❌      |     ✅      |
+| View audit logs                       |  ❌  |    ❌    |      ❌      |      ❌       | ✅ (region) | ✅ (global) |
+| System configuration                  |  ❌  |    ❌    |      ❌      |      ❌       |     ❌      |     ✅      |
 
 ### 6.2 Implementation
 
@@ -682,92 +683,104 @@ APIs are grouped by module. All responses follow the standard envelope (see §13
 
 ### 7.1 Auth Module
 
-| Method | Endpoint | Auth | Role | Description |
-|---|---|:---:|---|---|
-| POST | `/auth/register` | ❌ | — | Register new user |
-| POST | `/auth/verify-otp` | ❌ | — | Verify registration/login OTP |
-| POST | `/auth/resend-otp` | ❌ | — | Resend OTP |
-| POST | `/auth/login` | ❌ | — | Login, returns access token + refresh cookie |
-| POST | `/auth/refresh` | Cookie | — | Rotate access token |
-| POST | `/auth/logout` | ✅ | Any | Revoke current session |
-| POST | `/auth/forgot-password` | ❌ | — | Request password reset OTP |
-| POST | `/auth/reset-password` | ❌ | — | Reset password after OTP verification |
-| POST | `/auth/face-verification` | ✅ | Any | Submit selfie for face verification |
-| POST | `/auth/nid-verification` | ✅ | Any | Submit NID for verification |
+| Method | Endpoint                  |  Auth  | Role | Description                           |
+| ------ | ------------------------- | :----: | ---- | ------------------------------------- |
+| POST   | `/auth/register`          |   ❌   | —    | Register new user                     |
+| POST   | `/auth/verify-otp`        |   ❌   | —    | Verify registration/login email OTP   |
+| POST   | `/auth/resend-otp`        |   ❌   | —    | Resend OTP                            |
+| POST   | `/auth/login`             |   ❌   | —    | Login, starts email OTP verification  |
+| POST   | `/auth/refresh`           | Cookie | —    | Rotate access token                   |
+| POST   | `/auth/logout`            |   ✅   | Any  | Revoke current session                |
+| POST   | `/auth/forgot-password`   |   ❌   | —    | Request password reset OTP            |
+| POST   | `/auth/reset-password`    |   ❌   | —    | Reset password after OTP verification |
+| POST   | `/auth/face-verification` |   ✅   | Any  | Submit selfie for face verification   |
+| POST   | `/auth/nid-verification`  |   ✅   | Any  | Submit NID for verification           |
 
 **Example — `POST /auth/register`**
 
 Request body:
+
 ```json
-{ "fullName": "string", "email": "string", "phone": "string", "password": "string" }
+{
+  "fullName": "string",
+  "email": "string",
+  "phone": "string",
+  "password": "string"
+}
 ```
+
 Validation: `fullName` 2–100 chars; valid email; phone E.164 format; password min 8 chars with 1 number + 1 symbol.
 Response `201`:
+
 ```json
-{ "success": true, "message": "OTP sent to phone", "data": { "userId": "..." } }
+{ "success": true, "message": "OTP sent to email", "data": { "userId": "..." } }
 ```
 
 ### 7.2 Report Module
 
-| Method | Endpoint | Auth | Role | Description |
-|---|---|:---:|---|---|
-| POST | `/reports` | ✅ | Any verified user | Create report |
-| GET | `/reports` | ✅ | Any | List reports (filters: category, status, radius) |
-| GET | `/reports/:id` | ✅ | Any | Get single report |
-| PATCH | `/reports/:id` | ✅ | Owner/Admin | Update report details |
-| PATCH | `/reports/:id/status` | ✅ | Volunteer+ | Update report status |
-| DELETE | `/reports/:id` | ✅ | Owner/Admin | Soft-delete report |
-| GET | `/reports/nearby` | ✅ | Any | Radius-based query (lat, lng, radius) |
-| POST | `/reports/:id/vote` | ✅ | Any | Cast upvote/downvote |
-| POST | `/reports/:id/comments` | ✅ | Any | Add comment |
-| GET | `/reports/:id/comments` | ✅ | Any | List comments |
-| POST | `/reports/victim-mode` | ✅ | Any | Trigger high-priority self-report |
+| Method | Endpoint                | Auth | Role                 | Description                                                           |
+| ------ | ----------------------- | :--: | -------------------- | --------------------------------------------------------------------- |
+| POST   | `/reports`              |  ✅  | User                 | Create minor report; Reporter/Admin can create major or minor reports |
+| GET    | `/reports`              |  ✅  | Any                  | List reports (filters: category, status, radius)                      |
+| GET    | `/reports/:id`          |  ✅  | Any                  | Get single report                                                     |
+| PATCH  | `/reports/:id`          |  ✅  | Owner/Admin          | Update report details                                                 |
+| PATCH  | `/reports/:id/close`    |  ✅  | Owner/Reporter/Admin | Close report                                                          |
+| PATCH  | `/reports/:id/status`   |  ✅  | Volunteer+           | Update report status                                                  |
+| DELETE | `/reports/:id`          |  ✅  | Owner/Admin          | Soft-delete report                                                    |
+| GET    | `/reports/nearby`       |  ✅  | Any                  | Radius-based query (lat, lng, radius)                                 |
+| POST   | `/reports/:id/vote`     |  ✅  | Any                  | Cast upvote/downvote                                                  |
+| POST   | `/reports/:id/comments` |  ✅  | Any                  | Add comment                                                           |
+| GET    | `/reports/:id/comments` |  ✅  | Any                  | List comments                                                         |
+| POST   | `/reports/victim-mode`  |  ✅  | Any                  | Trigger high-priority self-report                                     |
 
 **Example — `POST /reports`**
 
 Request body:
+
 ```json
 {
   "title": "string",
   "description": "string",
   "category": "fire | accident | crime | medical | flood | natural_disaster | public_hazard | other",
-  "severity": "minor | major | critical",
+  "severity": "minor | major",
   "location": { "lat": 23.79, "lng": 90.41 },
   "media": ["cloudinary_temp_id"]
 }
 ```
+
 Validation required; authentication required; no specific role beyond `isVerified: true`.
+Normal users can create minor reports only. Reporter and Admin roles can create both minor and major reports.
 Response `201`: created report object + `credibilityScore: 0`.
 
 ### 7.3 Volunteer / Response Team Module
 
-| Method | Endpoint | Auth | Role | Description |
-|---|---|:---:|---|---|
-| POST | `/volunteers/apply` | ✅ | User | Apply to become a Volunteer |
-| PATCH | `/volunteers/availability` | ✅ | Volunteer | Toggle online/offline/busy |
-| GET | `/volunteers/nearby` | ✅ | Admin/Response Team | List volunteers near a report |
-| POST | `/response-teams` | ✅ | Admin | Create a Response Team unit |
-| PATCH | `/reports/:id/assign` | ✅ | Admin | Assign volunteers/team to a report |
+| Method | Endpoint                   | Auth | Role                | Description                        |
+| ------ | -------------------------- | :--: | ------------------- | ---------------------------------- |
+| POST   | `/volunteers/apply`        |  ✅  | User                | Apply to become a Volunteer        |
+| PATCH  | `/volunteers/availability` |  ✅  | Volunteer           | Toggle online/offline/busy         |
+| GET    | `/volunteers/nearby`       |  ✅  | Admin/Response Team | List volunteers near a report      |
+| POST   | `/response-teams`          |  ✅  | Admin               | Create a Response Team unit        |
+| PATCH  | `/reports/:id/assign`      |  ✅  | Admin               | Assign volunteers/team to a report |
 
 ### 7.4 Notification Module
 
-| Method | Endpoint | Auth | Role | Description |
-|---|---|:---:|---|---|
-| GET | `/notifications` | ✅ | Any | List paginated notifications |
-| PATCH | `/notifications/:id/read` | ✅ | Any | Mark as read |
-| PATCH | `/notifications/read-all` | ✅ | Any | Mark all as read |
-| POST | `/notifications/register-device` | ✅ | Any | Register FCM token |
+| Method | Endpoint                         | Auth | Role | Description                  |
+| ------ | -------------------------------- | :--: | ---- | ---------------------------- |
+| GET    | `/notifications`                 |  ✅  | Any  | List paginated notifications |
+| PATCH  | `/notifications/:id/read`        |  ✅  | Any  | Mark as read                 |
+| PATCH  | `/notifications/read-all`        |  ✅  | Any  | Mark all as read             |
+| POST   | `/notifications/register-device` |  ✅  | Any  | Register FCM token           |
 
 ### 7.5 Admin Module
 
-| Method | Endpoint | Auth | Role | Description |
-|---|---|:---:|---|---|
-| GET | `/admin/users` | ✅ | Admin | List/search users |
-| PATCH | `/admin/users/:id/lock` | ✅ | Admin | Lock/unlock account |
-| PATCH | `/admin/users/:id/verify-nid` | ✅ | Admin | Approve/reject NID |
-| PATCH | `/admin/reports/:id/verify` | ✅ | Admin | Verify or reject a report |
-| GET | `/admin/audit-logs` | ✅ | Admin | View audit logs |
-| PATCH | `/admin/users/:id/role` | ✅ | Super Admin | Change user role |
+| Method | Endpoint                      | Auth | Role        | Description               |
+| ------ | ----------------------------- | :--: | ----------- | ------------------------- |
+| GET    | `/admin/users`                |  ✅  | Admin       | List/search users         |
+| PATCH  | `/admin/users/:id/lock`       |  ✅  | Admin       | Lock/unlock account       |
+| PATCH  | `/admin/users/:id/verify-nid` |  ✅  | Admin       | Approve/reject NID        |
+| PATCH  | `/admin/reports/:id/verify`   |  ✅  | Admin       | Verify or reject a report |
+| GET    | `/admin/audit-logs`           |  ✅  | Admin       | View audit logs           |
+| PATCH  | `/admin/users/:id/role`       |  ✅  | Super Admin | Change user role          |
 
 ---
 
@@ -786,8 +799,8 @@ Response `201`: created report object + `credibilityScore: 0`.
 
 ```mermaid
 flowchart TD
-    A[New Report] --> B{Category is inherently critical? e.g. fire, medical, mass crime}
-    B -- Yes --> C[severity = major/critical]
+    A[New Report] --> B{Category is inherently major? e.g. fire, medical, mass crime}
+    B -- Yes --> C[severity = major]
     B -- No --> D{User-selected severity}
     D --> E{Keyword/NLP heuristic on description}
     E --> F[Compute weighted severity score]
@@ -800,7 +813,7 @@ flowchart TD
 
 ### 8.3 Escalation Pipeline
 
-- **Major/Critical reports** escalate immediately to Volunteers and Response Teams within `escalationRadiusMeters` (default 1000m, expanding to 3000m if no acknowledgment within 3 minutes).
+- **Major reports** escalate immediately to Volunteers and Response Teams within `escalationRadiusMeters` (default 1000m, expanding to 3000m if no acknowledgment within 3 minutes).
 - **Minor reports** stay in community-verification mode — escalate only if they accumulate `upvotes - downvotes >= 5` **and** `credibilityScore >= 60`.
 - Escalation writes an `AuditLog` entry and creates `Notification` documents for every targeted Volunteer/Response Team member, dispatched via Socket.io + push.
 
@@ -822,13 +835,13 @@ credibilityScore = clamp(
 
 Applied to a user whenever one of their reports resolves:
 
-| Outcome | Score Change |
-|---|---|
-| Report verified & resolved successfully | +3 |
-| Report resolved but ultimately minor severity | +1 |
-| Report marked `false_report` | −10 |
-| Vote matches final report outcome | +0.5 |
-| Vote contradicts final report outcome | −0.5 |
+| Outcome                                       | Score Change |
+| --------------------------------------------- | ------------ |
+| Report verified & resolved successfully       | +3           |
+| Report resolved but ultimately minor severity | +1           |
+| Report marked `false_report`                  | −10          |
+| Vote matches final report outcome             | +0.5         |
+| Vote contradicts final report outcome         | −0.5         |
 
 Score is clamped between 0–100. Users below `reliabilityScore: 20` have their new reports automatically flagged for Admin pre-review before public visibility.
 
@@ -836,7 +849,7 @@ Score is clamped between 0–100. Users below `reliabilityScore: 20` have their 
 
 A one-tap "I am in danger" trigger:
 
-1. Bypasses normal report form — auto-fills location, sets `severity: critical`, `isVictimMode: true`.
+1. Bypasses normal report form — auto-fills location, sets `severity: major`, `isVictimMode: true`.
 2. Skips community-verification step entirely — escalates **immediately** to nearest Response Team + Volunteers + Admin, regardless of the reporter's reliability score.
 3. Opens a live location-sharing channel (Socket.io room) so responders can track the victim's movement until resolution.
 4. Sends an automatic SMS to a pre-configured emergency contact, if the user has one on file.
@@ -854,13 +867,13 @@ A one-tap "I am in danger" trigger:
 
 ### 8.9 Notifications (business trigger summary)
 
-| Trigger | Recipients | Channel |
-|---|---|---|
-| New report nearby | Users within radius | In-app + push |
-| Report escalated | Assigned volunteers/team | Push + SMS (critical only) |
-| Vote milestone reached | Reporter | In-app |
-| Status changed | Reporter + assigned responders | In-app + push |
-| Account locked / NID rejected | Affected user | Email |
+| Trigger                       | Recipients                     | Channel                 |
+| ----------------------------- | ------------------------------ | ----------------------- |
+| New report nearby             | Users within radius            | In-app + push           |
+| Report escalated              | Assigned volunteers/team       | Push + SMS (major only) |
+| Vote milestone reached        | Reporter                       | In-app                  |
+| Status changed                | Reporter + assigned responders | In-app + push           |
+| Account locked / NID rejected | Affected user                  | Email                   |
 
 ### 8.10 Report Verification & Fake Report Detection
 
@@ -868,14 +881,14 @@ A one-tap "I am in danger" trigger:
 
 **Fake Detection heuristic (rule-based baseline, ML-upgradeable):**
 
-| Signal | Weight |
-|---|---|
-| Reporter's `reliabilityScore < 20` | High |
-| Report location > 50km from reporter's registered/typical location | Medium |
-| Duplicate report (same category + location within 100m within 10 minutes) | High |
-| No media attached for a "major"/"critical" severity claim | Medium |
-| Description contains flagged keyword patterns (spam/test/joke) | Medium |
-| Rapid-fire report submission (>3 reports in 5 minutes by same user) | High |
+| Signal                                                                    | Weight |
+| ------------------------------------------------------------------------- | ------ |
+| Reporter's `reliabilityScore < 20`                                        | High   |
+| Report location > 50km from reporter's registered/typical location        | Medium |
+| Duplicate report (same category + location within 100m within 10 minutes) | High   |
+| No media attached for a "major" severity claim                            | Medium |
+| Description contains flagged keyword patterns (spam/test/joke)            | Medium |
+| Rapid-fire report submission (>3 reports in 5 minutes by same user)       | High   |
 
 Each signal contributes to `fakeDetectionScore` (0–100); `>= 60` sets `isFakeFlagged: true` and routes the report to an Admin review queue instead of public feed visibility.
 
@@ -897,16 +910,16 @@ report:{reportId}       -> live room for viewers/responders of one active report
 
 ### 9.2 Events
 
-| Event | Direction | Payload | Purpose |
-|---|---|---|---|
-| `report:created` | Server → Room `geo:{cell}` | Report summary | New nearby report |
-| `report:escalated` | Server → Room `role:volunteer`/`role:response_team` | Report + distance | Escalation alert |
-| `report:statusChanged` | Server → Room `report:{id}` | New status | Live status update |
-| `report:voteUpdate` | Server → Room `report:{id}` | Vote tallies | Live credibility update |
-| `victim:locationUpdate` | Client → Server → Room `report:{id}` | Coordinates | Live victim tracking |
-| `volunteer:acknowledge` | Client → Server | reportId | Volunteer accepts dispatch |
-| `chat:typing` | Client → Server → Room `report:{id}` | userId | Typing indicator (incident chat) |
-| `notification:new` | Server → Room `user:{id}` | Notification object | Real-time personal alert |
+| Event                   | Direction                                           | Payload             | Purpose                          |
+| ----------------------- | --------------------------------------------------- | ------------------- | -------------------------------- |
+| `report:created`        | Server → Room `geo:{cell}`                          | Report summary      | New nearby report                |
+| `report:escalated`      | Server → Room `role:volunteer`/`role:response_team` | Report + distance   | Escalation alert                 |
+| `report:statusChanged`  | Server → Room `report:{id}`                         | New status          | Live status update               |
+| `report:voteUpdate`     | Server → Room `report:{id}`                         | Vote tallies        | Live credibility update          |
+| `victim:locationUpdate` | Client → Server → Room `report:{id}`                | Coordinates         | Live victim tracking             |
+| `volunteer:acknowledge` | Client → Server                                     | reportId            | Volunteer accepts dispatch       |
+| `chat:typing`           | Client → Server → Room `report:{id}`                | userId              | Typing indicator (incident chat) |
+| `notification:new`      | Server → Room `user:{id}`                           | Notification object | Real-time personal alert         |
 
 ### 9.3 Connection Handling
 
@@ -922,12 +935,12 @@ report:{reportId}       -> live room for viewers/responders of one active report
 
 **Recommendation: Leaflet + OpenStreetMap tiles**, with Google Maps API as an optional paid upgrade path.
 
-| Criterion | Leaflet (OSM) | Google Maps API |
-|---|---|---|
-| Cost | Free | Paid beyond free tier |
-| Customization | Fully open, plugin ecosystem (heatmap, clustering) | Good but more restricted |
-| Offline/PWA friendliness | Better (tile caching feasible) | Harder due to ToS |
-| Data quality (Bangladesh region) | Good via OSM contributors | Very good |
+| Criterion                        | Leaflet (OSM)                                      | Google Maps API          |
+| -------------------------------- | -------------------------------------------------- | ------------------------ |
+| Cost                             | Free                                               | Paid beyond free tier    |
+| Customization                    | Fully open, plugin ecosystem (heatmap, clustering) | Good but more restricted |
+| Offline/PWA friendliness         | Better (tile caching feasible)                     | Harder due to ToS        |
+| Data quality (Bangladesh region) | Good via OSM contributors                          | Very good                |
 
 Leaflet is recommended as the default for cost control and open-source alignment with the MERN stack; Google Maps API remains a drop-in alternative if premium geocoding/traffic data becomes necessary.
 
@@ -940,13 +953,13 @@ Leaflet is recommended as the default for cost control and open-source alignment
 - **Clustering**: `react-leaflet-cluster` groups markers at low zoom to avoid clutter in dense areas.
 - **Marker Color Coding**:
 
-| Marker Color | Meaning |
-|---|---|
-| 🔴 Red | Critical / Victim Mode |
-| 🟠 Orange | Major |
-| 🟡 Yellow | Minor (unverified) |
-| 🟢 Green | Verified / Resolved |
-| ⚫ Grey | False report / Rejected |
+| Marker Color | Meaning                 |
+| ------------ | ----------------------- |
+| 🔴 Red       | Major / Victim Mode     |
+| 🟠 Orange    | Major                   |
+| 🟡 Yellow    | Minor (unverified)      |
+| 🟢 Green     | Verified / Resolved     |
+| ⚫ Grey      | False report / Rejected |
 
 - **Victim Markers**: pulsing animated marker with live-tracking trail line.
 - **Major Incident Radius**: a translucent circle overlay showing `escalationRadiusMeters`, so nearby volunteers visually gauge proximity/urgency.
@@ -964,7 +977,7 @@ flowchart LR
     C --> D[In-App - Save to DB]
     C --> E[Socket.io - Real-time push to connected clients]
     C --> F[Push Queue - FCM]
-    C --> G[SMS Queue - critical only]
+    C --> G[SMS Queue - major only]
     C --> H[Email Queue - account/security events]
     F --> I[Background Worker]
     G --> I
@@ -974,11 +987,11 @@ flowchart LR
 
 ### 11.2 Components
 
-| Component | Responsibility |
-|---|---|
-| **In-app** | Persisted `Notification` documents, fetched via REST, marked read/unread. |
-| **Socket Notifications** | Real-time delivery to currently-connected clients on `user:{id}` room. |
-| **Push Notifications** | FCM tokens registered per device; delivered even when app is backgrounded/closed. |
+| Component                         | Responsibility                                                                                                                                                                                       |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **In-app**                        | Persisted `Notification` documents, fetched via REST, marked read/unread.                                                                                                                            |
+| **Socket Notifications**          | Real-time delivery to currently-connected clients on `user:{id}` room.                                                                                                                               |
+| **Push Notifications**            | FCM tokens registered per device; delivered even when app is backgrounded/closed.                                                                                                                    |
 | **Background Notification Queue** | A job queue (in-memory `Bull`/Redis-backed, or simple Mongo-backed queue for v1) decouples notification dispatch from the request/response cycle so a slow SMS gateway never blocks report creation. |
 
 ### 11.3 Flow
@@ -993,21 +1006,21 @@ flowchart LR
 
 ## 12. Security Architecture
 
-| Concern | Mitigation |
-|---|---|
-| **JWT** | Short-lived (15 min) access tokens, signed with a strong secret, `RS256` recommended for future multi-service verification. |
-| **Refresh Tokens** | httpOnly + secure + sameSite cookies; hashed at rest; rotated on each refresh; revocable per-session. |
-| **Helmet** | Applied globally to set secure HTTP headers (CSP, X-Frame-Options, HSTS). |
-| **CORS** | Whitelist explicit client origin(s) only; credentials: true for cookie-based refresh flow. |
-| **XSS** | React's default escaping + `express-mongo-sanitize` + output encoding for any rendered user content (comments, descriptions). |
-| **CSRF** | Since auth uses `Authorization: Bearer` header for access tokens (not auto-sent by browser) CSRF risk is low; the refresh-token cookie route additionally validates a custom header (`X-Requested-With`) as defense-in-depth. |
-| **Password Hashing** | bcrypt, cost factor 12, never log or return password hash. |
-| **Rate Limiting** | `express-rate-limit` per-route tiers: strict on auth/OTP, moderate on report creation, lenient on read endpoints. |
-| **Input Validation** | `express-validator`/Zod schemas on every mutating endpoint; reject unknown fields. |
-| **File Upload Security** | `multer` with file-type whitelist (jpg/png/mp4), 10MB size cap, virus-scan hook point, direct-to-Cloudinary upload to avoid storing untrusted files on the server disk. |
-| **Image Validation** | MIME-type + magic-number verification (not just extension), Cloudinary moderation add-on for explicit content detection. |
-| **Logging** | `winston` for structured server logs (info/warn/error), `morgan` for HTTP access logs, PII redacted from logs. |
-| **Audit Trails** | Every privileged action (status change, role change, account lock, verification decision) recorded in `AuditLog` with actor, timestamp, and before/after diff. |
+| Concern                  | Mitigation                                                                                                                                                                                                                    |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **JWT**                  | Short-lived (15 min) access tokens, signed with a strong secret, `RS256` recommended for future multi-service verification.                                                                                                   |
+| **Refresh Tokens**       | httpOnly + secure + sameSite cookies; hashed at rest; rotated on each refresh; revocable per-session.                                                                                                                         |
+| **Helmet**               | Applied globally to set secure HTTP headers (CSP, X-Frame-Options, HSTS).                                                                                                                                                     |
+| **CORS**                 | Whitelist explicit client origin(s) only; credentials: true for cookie-based refresh flow.                                                                                                                                    |
+| **XSS**                  | React's default escaping + `express-mongo-sanitize` + output encoding for any rendered user content (comments, descriptions).                                                                                                 |
+| **CSRF**                 | Since auth uses `Authorization: Bearer` header for access tokens (not auto-sent by browser) CSRF risk is low; the refresh-token cookie route additionally validates a custom header (`X-Requested-With`) as defense-in-depth. |
+| **Password Hashing**     | bcrypt, cost factor 12, never log or return password hash.                                                                                                                                                                    |
+| **Rate Limiting**        | `express-rate-limit` per-route tiers: strict on auth/OTP, moderate on report creation, lenient on read endpoints.                                                                                                             |
+| **Input Validation**     | `express-validator`/Zod schemas on every mutating endpoint; reject unknown fields.                                                                                                                                            |
+| **File Upload Security** | `multer` with file-type whitelist (jpg/png/mp4), 10MB size cap, virus-scan hook point, direct-to-Cloudinary upload to avoid storing untrusted files on the server disk.                                                       |
+| **Image Validation**     | MIME-type + magic-number verification (not just extension), Cloudinary moderation add-on for explicit content detection.                                                                                                      |
+| **Logging**              | `winston` for structured server logs (info/warn/error), `morgan` for HTTP access logs, PII redacted from logs.                                                                                                                |
+| **Audit Trails**         | Every privileged action (status change, role change, account lock, verification decision) recorded in `AuditLog` with actor, timestamp, and before/after diff.                                                                |
 
 ---
 
@@ -1032,49 +1045,51 @@ class ApiError extends Error {
 ### 13.2 Standard API Response Format
 
 **Success:**
+
 ```json
 {
   "success": true,
   "message": "Report created successfully",
-  "data": { }
+  "data": {}
 }
 ```
 
 **Error:**
+
 ```json
 {
   "success": false,
   "message": "Validation failed",
-  "errors": [ { "field": "phone", "message": "Invalid phone number" } ]
+  "errors": [{ "field": "phone", "message": "Invalid phone number" }]
 }
 ```
 
 ### 13.3 Error Categories
 
-| Type | HTTP Code | Example |
-|---|---|---|
-| Validation Error | 400 | Missing required field |
-| Authentication Error | 401 | Invalid/expired token |
-| Authorization Error | 403 | Insufficient role/permission |
-| Not Found | 404 | Report ID doesn't exist |
-| Conflict | 409 | Duplicate vote, duplicate email |
-| Rate Limited | 429 | Too many OTP requests |
-| Database Error | 500 | Mongoose connection/query failure (never exposes raw driver error to client) |
+| Type                 | HTTP Code | Example                                                                      |
+| -------------------- | --------- | ---------------------------------------------------------------------------- |
+| Validation Error     | 400       | Missing required field                                                       |
+| Authentication Error | 401       | Invalid/expired token                                                        |
+| Authorization Error  | 403       | Insufficient role/permission                                                 |
+| Not Found            | 404       | Report ID doesn't exist                                                      |
+| Conflict             | 409       | Duplicate vote, duplicate email                                              |
+| Rate Limited         | 429       | Too many OTP requests                                                        |
+| Database Error       | 500       | Mongoose connection/query failure (never exposes raw driver error to client) |
 
 ---
 
 ## 14. Scalability
 
-| Strategy | Application |
-|---|---|
-| **Modular Architecture** | Controller → Service → Repository separation allows any layer to be replaced or extracted independently. |
-| **Service Layer** | All business rules centralized; controllers stay HTTP-only, enabling reuse across REST, sockets, and future GraphQL/gRPC layers. |
-| **Repository Pattern** | Abstracts Mongoose specifics — a future migration to a different ODM/DB requires touching only `repositories/`. |
-| **Redis (future)** | Session/refresh-token store, Socket.io adapter for horizontal scaling across multiple Node instances, and a real job queue (BullMQ) backend. |
-| **Message Queue (future)** | RabbitMQ/SQS for notification dispatch and heavy async jobs (e.g., fake-detection ML inference) decoupled from the API process. |
+| Strategy                   | Application                                                                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Modular Architecture**   | Controller → Service → Repository separation allows any layer to be replaced or extracted independently.                                                                                          |
+| **Service Layer**          | All business rules centralized; controllers stay HTTP-only, enabling reuse across REST, sockets, and future GraphQL/gRPC layers.                                                                  |
+| **Repository Pattern**     | Abstracts Mongoose specifics — a future migration to a different ODM/DB requires touching only `repositories/`.                                                                                   |
+| **Redis (future)**         | Session/refresh-token store, Socket.io adapter for horizontal scaling across multiple Node instances, and a real job queue (BullMQ) backend.                                                      |
+| **Message Queue (future)** | RabbitMQ/SQS for notification dispatch and heavy async jobs (e.g., fake-detection ML inference) decoupled from the API process.                                                                   |
 | **Microservice Readiness** | Auth, Report, and Notification domains are already logically isolated (own services/repositories) — extractable into separate deployables behind an API gateway without rewriting business logic. |
-| **Caching** | Frequently-read, slow-changing data (e.g., region config, category lists) cached in Redis/in-memory LRU; report feeds cached briefly (10–30s) per geo-cell. |
-| **CDN** | All static client assets and Cloudinary media served via CDN edge caching by default. |
+| **Caching**                | Frequently-read, slow-changing data (e.g., region config, category lists) cached in Redis/in-memory LRU; report feeds cached briefly (10–30s) per geo-cell.                                       |
+| **CDN**                    | All static client assets and Cloudinary media served via CDN edge caching by default.                                                                                                             |
 
 ---
 
@@ -1151,56 +1166,56 @@ flowchart LR
 
 ## 16. Future Improvements
 
-| Feature | Value |
-|---|---|
-| **Duplicate Report Detection** | Cluster reports by geo + time + category to auto-merge duplicates, reducing noise. |
-| **AI-Assisted Report Classification** | NLP model to auto-suggest category/severity from free-text description. |
-| **Image Moderation** | Auto-flag graphic/inappropriate media via vision moderation API. |
-| **Spam Detection** | Behavioral pattern analysis beyond the rule-based baseline in §8.10. |
+| Feature                                  | Value                                                                                |
+| ---------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Duplicate Report Detection**           | Cluster reports by geo + time + category to auto-merge duplicates, reducing noise.   |
+| **AI-Assisted Report Classification**    | NLP model to auto-suggest category/severity from free-text description.              |
+| **Image Moderation**                     | Auto-flag graphic/inappropriate media via vision moderation API.                     |
+| **Spam Detection**                       | Behavioral pattern analysis beyond the rule-based baseline in §8.10.                 |
 | **Trust Score / User Reputation Badges** | Visible reputation tiers (Bronze/Silver/Gold Reporter) to gamify accurate reporting. |
-| **Analytics Dashboard** | Region-wise incident trends, response time metrics, for Admins/Super Admins. |
-| **Admin Dashboard** | Dedicated web console for verification queues, user management, audit logs. |
-| **Incident Timeline** | Chronological event log per report (created → voted → escalated → resolved). |
-| **Report History Export** | CSV/PDF export of a user's or region's report history. |
-| **Offline Support (PWA)** | Queue report submissions locally when offline, sync on reconnect. |
-| **SMS Integration Expansion** | Two-way SMS reporting for users without smartphones/data. |
-| **Email Digest** | Weekly summary of community incidents in the user's area. |
-| **Multi-language Support** | i18n for Bengali/English at minimum. |
-| **Disaster Prediction Integration** | Ingest weather/seismic APIs to proactively warn regions (flood/cyclone forecasts). |
-| **Resource Optimization Engine** | Predictive allocation of ambulances/personnel based on historical incident density. |
+| **Analytics Dashboard**                  | Region-wise incident trends, response time metrics, for Admins/Super Admins.         |
+| **Admin Dashboard**                      | Dedicated web console for verification queues, user management, audit logs.          |
+| **Incident Timeline**                    | Chronological event log per report (created → voted → escalated → resolved).         |
+| **Report History Export**                | CSV/PDF export of a user's or region's report history.                               |
+| **Offline Support (PWA)**                | Queue report submissions locally when offline, sync on reconnect.                    |
+| **SMS Integration Expansion**            | Two-way SMS reporting for users without smartphones/data.                            |
+| **Email Digest**                         | Weekly summary of community incidents in the user's area.                            |
+| **Multi-language Support**               | i18n for Bengali/English at minimum.                                                 |
+| **Disaster Prediction Integration**      | Ingest weather/seismic APIs to proactively warn regions (flood/cyclone forecasts).   |
+| **Resource Optimization Engine**         | Predictive allocation of ambulances/personnel based on historical incident density.  |
 
 ---
 
 ## 17. Architecture Decisions
 
-| # | Original Idea (implied) | Recommended Change | Rationale | Trade-off |
-|---|---|---|---|---|
-| 1 | Separate collections per role (Volunteer, Reporter, etc.) | Single `User` collection with `role` + RBAC | Avoids identity duplication, simplifies auth, supports role transitions | Slightly larger documents; mitigated by `roleProfile` sub-document being optional/sparse |
-| 2 | Poll-based updates for report status | Socket.io real-time rooms | True real-time is core to the product's value proposition | Requires sticky sessions or Redis adapter when scaling horizontally |
-| 3 | Link-based password reset | OTP-based reset | Matches phone-first UX common in the target market; consistent verification pattern across the app | Slightly less convenient than a magic link on desktop |
-| 4 | Store raw refresh tokens | Store only hashed refresh tokens, rotate on use | Prevents DB-leak token theft, standard OAuth2-style security practice | Marginal extra compute per refresh (negligible) |
-| 5 | Auto-escalate every "major" report instantly to Admins directly | Escalate to Volunteers/Response Teams first, Admin notified in parallel (not gatekeeping) | Reduces response latency — Admins shouldn't be a bottleneck for time-critical dispatch | Admins have less pre-filtering control; mitigated by audit logs + post-hoc review |
-| 6 | Client directly calls third-party map/SMS APIs | All third-party calls proxied through backend services | Keeps API keys server-side, enables centralized rate control and logging | Slightly higher backend load |
+| #   | Original Idea (implied)                                         | Recommended Change                                                                        | Rationale                                                                                          | Trade-off                                                                                |
+| --- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 1   | Separate collections per role (Volunteer, Reporter, etc.)       | Single `User` collection with `role` + RBAC                                               | Avoids identity duplication, simplifies auth, supports role transitions                            | Slightly larger documents; mitigated by `roleProfile` sub-document being optional/sparse |
+| 2   | Poll-based updates for report status                            | Socket.io real-time rooms                                                                 | True real-time is core to the product's value proposition                                          | Requires sticky sessions or Redis adapter when scaling horizontally                      |
+| 3   | Link-based password reset                                       | OTP-based reset                                                                           | Matches phone-first UX common in the target market; consistent verification pattern across the app | Slightly less convenient than a magic link on desktop                                    |
+| 4   | Store raw refresh tokens                                        | Store only hashed refresh tokens, rotate on use                                           | Prevents DB-leak token theft, standard OAuth2-style security practice                              | Marginal extra compute per refresh (negligible)                                          |
+| 5   | Auto-escalate every "major" report instantly to Admins directly | Escalate to Volunteers/Response Teams first, Admin notified in parallel (not gatekeeping) | Reduces response latency — Admins shouldn't be a bottleneck for urgent dispatch                    | Admins have less pre-filtering control; mitigated by audit logs + post-hoc review        |
+| 6   | Client directly calls third-party map/SMS APIs                  | All third-party calls proxied through backend services                                    | Keeps API keys server-side, enables centralized rate control and logging                           | Slightly higher backend load                                                             |
 
 ---
 
 ## 18. Coding Standards
 
-| Category | Convention |
-|---|---|
-| **Variables/Functions** | `camelCase` (`getUserById`) |
-| **Classes/Components** | `PascalCase` (`ReportCard.jsx`, `ApiError`) |
-| **Constants/Enums** | `UPPER_SNAKE_CASE` (`MAX_LOGIN_ATTEMPTS`) |
-| **Files (React components)** | `PascalCase.jsx` (`ReportForm.jsx`) |
-| **Files (utils/services)** | `camelCase.js` (`geoUtils.js`, `report.service.js`) |
-| **Folders** | `kebab-case` or `camelCase`, consistent within each layer (`response-team/`) |
-| **API Routes** | plural nouns, kebab-case (`/response-teams`, `/nid-verification`) |
-| **MongoDB Collections** | PascalCase singular model name → pluralized lowercase collection (`Report` → `reports`) |
-| **MongoDB Fields** | `camelCase` |
-| **Environment Variables** | `UPPER_SNAKE_CASE` |
-| **Git Branches** | `type/short-description` (`feat/victim-mode`) |
-| **Commits** | Conventional Commits format |
-| **Redux Slices** | Named after feature, state shape documented at top of slice file |
+| Category                     | Convention                                                                              |
+| ---------------------------- | --------------------------------------------------------------------------------------- |
+| **Variables/Functions**      | `camelCase` (`getUserById`)                                                             |
+| **Classes/Components**       | `PascalCase` (`ReportCard.jsx`, `ApiError`)                                             |
+| **Constants/Enums**          | `UPPER_SNAKE_CASE` (`MAX_LOGIN_ATTEMPTS`)                                               |
+| **Files (React components)** | `PascalCase.jsx` (`ReportForm.jsx`)                                                     |
+| **Files (utils/services)**   | `camelCase.js` (`geoUtils.js`, `report.service.js`)                                     |
+| **Folders**                  | `kebab-case` or `camelCase`, consistent within each layer (`response-team/`)            |
+| **API Routes**               | plural nouns, kebab-case (`/response-teams`, `/nid-verification`)                       |
+| **MongoDB Collections**      | PascalCase singular model name → pluralized lowercase collection (`Report` → `reports`) |
+| **MongoDB Fields**           | `camelCase`                                                                             |
+| **Environment Variables**    | `UPPER_SNAKE_CASE`                                                                      |
+| **Git Branches**             | `type/short-description` (`feat/victim-mode`)                                           |
+| **Commits**                  | Conventional Commits format                                                             |
+| **Redux Slices**             | Named after feature, state shape documented at top of slice file                        |
 
 ---
 
@@ -1208,48 +1223,48 @@ flowchart LR
 
 ### 19.1 Client
 
-| Package | Purpose |
-|---|---|
-| `react-router-dom` | Client-side routing |
-| `axios` | HTTP client with interceptors for token refresh |
-| `@reduxjs/toolkit` | Predictable global state management |
-| `react-redux` | React bindings for Redux |
-| `react-hook-form` | Performant form state management |
-| `zod` | Schema validation shared conceptually with backend validators |
-| `socket.io-client` | Real-time communication |
-| `leaflet` + `react-leaflet` | Interactive maps |
-| `react-leaflet-cluster` | Marker clustering |
-| `leaflet.heat` | Heatmap visualization |
-| `react-hot-toast` | Non-blocking notifications/toasts |
-| `date-fns` | Lightweight date formatting |
-| `framer-motion` | UI animation (victim marker pulse, transitions) |
-| `js-cookie` | Cookie helper for client-side needs |
+| Package                     | Purpose                                                       |
+| --------------------------- | ------------------------------------------------------------- |
+| `react-router-dom`          | Client-side routing                                           |
+| `axios`                     | HTTP client with interceptors for token refresh               |
+| `@reduxjs/toolkit`          | Predictable global state management                           |
+| `react-redux`               | React bindings for Redux                                      |
+| `react-hook-form`           | Performant form state management                              |
+| `zod`                       | Schema validation shared conceptually with backend validators |
+| `socket.io-client`          | Real-time communication                                       |
+| `leaflet` + `react-leaflet` | Interactive maps                                              |
+| `react-leaflet-cluster`     | Marker clustering                                             |
+| `leaflet.heat`              | Heatmap visualization                                         |
+| `react-hot-toast`           | Non-blocking notifications/toasts                             |
+| `date-fns`                  | Lightweight date formatting                                   |
+| `framer-motion`             | UI animation (victim marker pulse, transitions)               |
+| `js-cookie`                 | Cookie helper for client-side needs                           |
 
 ### 19.2 Server
 
-| Package | Purpose |
-|---|---|
-| `express` | Web framework |
-| `mongoose` | MongoDB ODM |
-| `bcryptjs` | Password hashing |
-| `jsonwebtoken` | JWT issuing/verification |
-| `socket.io` | Real-time server |
-| `multer` | Multipart form/file upload handling |
-| `cloudinary` | Media storage/CDN |
-| `express-validator` | Request validation |
-| `helmet` | Secure HTTP headers |
-| `cors` | Cross-origin resource sharing control |
-| `express-rate-limit` | Abuse/rate limiting |
-| `express-mongo-sanitize` | NoSQL injection prevention |
-| `dotenv` | Environment variable loading |
-| `cookie-parser` | Parse httpOnly refresh-token cookies |
-| `morgan` | HTTP request logging |
-| `winston` | Application logging |
-| `node-cron` | Scheduled jobs (OTP cleanup, escalation timeouts) |
-| `twilio` (or local SMS gateway SDK) | SMS/OTP delivery |
-| `nodemailer` | Email delivery |
-| `firebase-admin` | Push notifications (FCM) |
-| `compression` | Response gzip compression |
+| Package                             | Purpose                                           |
+| ----------------------------------- | ------------------------------------------------- |
+| `express`                           | Web framework                                     |
+| `mongoose`                          | MongoDB ODM                                       |
+| `bcryptjs`                          | Password hashing                                  |
+| `jsonwebtoken`                      | JWT issuing/verification                          |
+| `socket.io`                         | Real-time server                                  |
+| `multer`                            | Multipart form/file upload handling               |
+| `cloudinary`                        | Media storage/CDN                                 |
+| `express-validator`                 | Request validation                                |
+| `helmet`                            | Secure HTTP headers                               |
+| `cors`                              | Cross-origin resource sharing control             |
+| `express-rate-limit`                | Abuse/rate limiting                               |
+| `express-mongo-sanitize`            | NoSQL injection prevention                        |
+| `dotenv`                            | Environment variable loading                      |
+| `cookie-parser`                     | Parse httpOnly refresh-token cookies              |
+| `morgan`                            | HTTP request logging                              |
+| `winston`                           | Application logging                               |
+| `node-cron`                         | Scheduled jobs (OTP cleanup, escalation timeouts) |
+| `twilio` (or local SMS gateway SDK) | SMS/OTP delivery                                  |
+| `nodemailer`                        | Email delivery                                    |
+| `firebase-admin`                    | Push notifications (FCM)                          |
+| `compression`                       | Response gzip compression                         |
 
 ---
 
