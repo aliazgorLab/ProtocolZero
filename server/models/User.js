@@ -15,12 +15,23 @@ const userSchema = new mongoose.Schema(
 
     // --- Platform Metrics & State ---
     score: { type: Number, default: null },
-    victimReportID: { type: String, default: null },
+    victimReportID: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Report",
+      default: null,
+    },
 
     // --- Role-Based Access Control ---
     accountType: {
       type: String,
-      enum: ["User", "Volunteer", "Reporter", "ResponseTeam"],
+      enum: [
+        "User",
+        "Volunteer",
+        "Reporter",
+        "ResponseTeam",
+        "Admin",
+        "SuperAdmin",
+      ],
       required: true,
     },
 
