@@ -38,19 +38,26 @@ exports.createReport = async (req, res) => {
       images,
     } = req.body;
 
-    if (!["User", "Volunteer", "Reporter"].includes(req.user.accountType)) {
+    if (
+      !["User", "Volunteer", "Reporter", "Admin", "SuperAdmin"].includes(
+        req.user.accountType,
+      )
+    ) {
       return res.status(403).json({
         success: false,
         message:
-          "Forbidden: Only User, Volunteer, and Reporter accounts can create incident reports.",
+          "Forbidden: Only User, Volunteer, Reporter, Admin, and SuperAdmin accounts can create incident reports.",
       });
     }
 
-    if (type === "major" && req.user.accountType !== "Reporter") {
+    if (
+      type === "major" &&
+      !["Reporter", "Admin", "SuperAdmin"].includes(req.user.accountType)
+    ) {
       return res.status(403).json({
         success: false,
         message:
-          "Forbidden: Only verified Reporters are authorized to issue Major emergency broadcasts.",
+          "Forbidden: Only verified Reporters, Admins, and SuperAdmins are authorized to issue Major emergency broadcasts.",
       });
     }
 
@@ -100,6 +107,10 @@ exports.createReport = async (req, res) => {
       });
     }
 
+    const isTrustedAuthor = ["Reporter", "Admin", "SuperAdmin"].includes(
+      req.user.accountType,
+    );
+
     const newReport = await Report.create({
       postId: generatePostId(),
       issuerId: req.user._id,
@@ -109,7 +120,7 @@ exports.createReport = async (req, res) => {
       location,
       impactAreas: type === "major" ? impactAreas : [],
       image: normalizeImageList(images),
-      reliability: req.user.accountType === "Reporter" ? "valid" : "none",
+      reliability: isTrustedAuthor ? "valid" : "none",
     });
 
     return res.status(201).json({
@@ -332,32 +343,36 @@ exports.deleteReport = async (req, res) => {
     }
 
     const isAuthor = report.issuerId._id.toString() === req.user._id.toString();
+    const isAdmin = ["Admin", "SuperAdmin"].includes(req.user.accountType);
     const isTargetAuthorReporter = report.issuerId.accountType === "Reporter";
-    const currentUserType = req.user.accountType;
 
-    if (currentUserType === "Reporter") {
-      if (isTargetAuthorReporter && !isAuthor) {
+    if (!isAdmin) {
+      if (!isAuthor) {
+        return res.status(403).json({
+          success: false,
+          message: "Forbidden: You can only delete your own report.",
+        });
+      }
+
+      if (
+        req.user.accountType === "Reporter" &&
+        isTargetAuthorReporter &&
+        !isAuthor
+      ) {
         return res.status(403).json({
           success: false,
           message:
             "Forbidden: A Reporter cannot delete another Reporter's report.",
         });
       }
-    } else if (!["Admin", "SuperAdmin"].includes(currentUserType)) {
-      if (!isAuthor) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "Forbidden: You do not have permission to delete this report.",
-        });
-      }
     }
 
-    await report.deleteOne();
+    await Report.deleteOne({ _id: report._id });
 
     return res.status(200).json({
       success: true,
       message: "Report deleted successfully.",
+      data: { reportId: report.postId },
     });
   } catch (error) {
     console.error("[ERROR] Delete Report Failure:", error.message);
