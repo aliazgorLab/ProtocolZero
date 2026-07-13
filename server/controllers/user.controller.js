@@ -75,3 +75,49 @@ exports.toggleVolunteerMode = async (req, res) => {
     });
   }
 };
+
+/**
+ * Updates the authenticated user's currentAddress, homeAddress, and gps only.
+ * Ownership is enforced by using req.user._id; no other profile fields are changed.
+ */
+exports.updateProfileAddresses = async (req, res) => {
+  try {
+    const { currentAddress, homeAddress, gps } = req.body;
+    const userId = req.user._id;
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        currentAddress: currentAddress.trim(),
+        homeAddress: homeAddress.trim(),
+        gps: {
+          type: gps.type,
+          coordinates: gps.coordinates,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User profile not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile addresses updated successfully.",
+      data: updatedUser,
+    });
+  } catch (error) {
+    console.error("[ERROR] Profile Address Update Failure:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while updating profile addresses.",
+    });
+  }
+};

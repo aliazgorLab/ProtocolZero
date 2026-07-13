@@ -18,6 +18,8 @@ const userSchema = new mongoose.Schema(
     currentAddress: { type: String, default: null },
     homeAddress: { type: String, default: null },
     gps: { type: pointSchema, default: null },
+    currentAddressGps: { type: pointSchema, default: null },
+    homeAddressGps: { type: pointSchema, default: null },
 
     // Platform Classification & State
     accountType: {
@@ -80,5 +82,7 @@ const userSchema = new mongoose.Schema(
 
 // Geospatial Indexing for radius-based responder lookup
 userSchema.index({ gps: "2dsphere" });
+userSchema.index({ currentAddressGps: "2dsphere" });
+userSchema.index({ homeAddressGps: "2dsphere" });
 
 module.exports = mongoose.model("User", userSchema);
