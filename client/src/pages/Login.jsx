@@ -1,17 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { loginUser, clearError } from '../features/auth/authSlice';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { isLoading, isAuthenticated, error } = useSelector((state) => state.auth);
 
   const togglePasswordVisibility = () => setShowPassword(!showPassword);
 
+  useEffect(() => {
+    dispatch(clearError());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/home', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
   const handleLogin = (e) => {
     e.preventDefault();
-    // TODO: connect to real API for authentication
-    // For now, redirect to dashboard
-    navigate('/home');
+    if (!email || !password) return;
+    dispatch(loginUser({ email, password }));
   };
 
   // Add visual interest to the background on mouse move (Desktop)
@@ -66,20 +82,16 @@ const Login = () => {
           </div>
 
           <form className="space-y-4" onSubmit={handleLogin}>
-            {/* Mobile Number Field */}
+            {/* Email Field */}
             <div className="space-y-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant px-1">Mobile Number</label>
+              <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant px-1">Email Address</label>
               <div className="flex items-center bg-surface-container rounded-lg border border-outline-variant focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all overflow-hidden">
-                <select className="bg-transparent border-none text-sm font-medium py-3 pl-3 pr-1 focus:ring-0 outline-none cursor-pointer">
-                  <option>+1</option>
-                  <option>+44</option>
-                  <option>+91</option>
-                  <option>+880</option>
-                </select>
-                <input 
-                  className="w-full bg-transparent border-none py-3 px-2 text-base focus:ring-0 outline-none placeholder:text-outline" 
-                  placeholder="(555) 000-0000" 
-                  type="tel" 
+                <input
+                  className="w-full bg-transparent border-none py-3 px-4 text-base focus:ring-0 outline-none placeholder:text-outline"
+                  placeholder="email@example.com"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
             </div>
@@ -88,10 +100,12 @@ const Login = () => {
             <div className="space-y-1">
               <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant px-1">Password</label>
               <div className="relative flex items-center bg-surface-container rounded-lg border border-outline-variant focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-                <input 
-                  className="w-full bg-transparent border-none py-3 px-4 text-base focus:ring-0 outline-none placeholder:text-outline" 
-                  placeholder="••••••••" 
-                  type={showPassword ? 'text' : 'password'} 
+                <input
+                  className="w-full bg-transparent border-none py-3 px-4 text-base focus:ring-0 outline-none placeholder:text-outline"
+                  placeholder="••••••••"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                 />
                 <button 
                   className="absolute right-3 p-1 text-on-surface-variant hover:text-primary transition-colors" 
@@ -108,13 +122,25 @@ const Login = () => {
               </div>
             </div>
 
+            {/* Error Message */}
+            {error && (
+              <div className="bg-error-container text-on-error-container text-sm font-medium px-4 py-3 rounded-lg flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">error</span>
+                {error}
+              </div>
+            )}
+
             {/* Action Button */}
-            <button 
+            <button
               type="submit"
-              className="w-full h-[48px] bg-primary-container text-white text-base font-semibold rounded-lg shadow-md hover:bg-primary transition-all active:scale-[0.98] mt-6 flex items-center justify-center gap-2"
+              disabled={isLoading}
+              className={`w-full h-[48px] text-white text-base font-semibold rounded-lg shadow-md transition-all mt-6 flex items-center justify-center gap-2 ${isLoading ? 'bg-primary/60 cursor-not-allowed' : 'bg-primary-container hover:bg-primary active:scale-[0.98]'}`}
             >
-              <span>Log In</span>
-              <span className="material-symbols-outlined text-[20px]">login</span>
+              {isLoading ? (
+                <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Signing In...</>
+              ) : (
+                <><span>Log In</span><span className="material-symbols-outlined text-[20px]">login</span></>
+              )}
             </button>
 
             {/* Divider */}
@@ -128,7 +154,7 @@ const Login = () => {
             <div className="text-center">
               <p className="text-sm text-on-surface-variant">
                 Don't have an account?{' '}
-                <Link className="text-primary font-bold hover:underline" to="#">Sign Up</Link>
+                <Link className="text-primary font-bold hover:underline" to="/signup">Sign Up</Link>
               </p>
             </div>
           </form>

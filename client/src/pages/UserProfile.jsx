@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
+import { logout } from '../features/auth/authSlice';
 
 const UserProfile = () => {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const [dashOffset, setDashOffset] = useState(283); // 2 * PI * 45
 
   useEffect(() => {
@@ -185,12 +189,12 @@ const UserProfile = () => {
                 </div>
                 <span className="material-symbols-outlined text-outline">chevron_right</span>
               </Link>
-              <Link to="/login" className="flex items-center justify-between p-4 hover:bg-surface-container transition-colors text-error">
+              <button onClick={() => { dispatch(logout()); navigate('/login'); }} className="w-full flex items-center justify-between p-4 hover:bg-surface-container transition-colors text-error">
                 <div className="flex items-center gap-3">
                   <span className="material-symbols-outlined">logout</span>
                   <span className="text-base">Sign Out</span>
                 </div>
-              </Link>
+              </button>
             </div>
           </div>
           <div className="bg-surface-container p-6 rounded-xl">

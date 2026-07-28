@@ -7,7 +7,7 @@ const { authorizeRoles } = require("../middleware/rbac.middleware");
 const userController = require("../controllers/user.controller");
 
 const rejectUnexpectedAddressFields = (req, res, next) => {
-  const allowedFields = ["currentAddress", "homeAddress", "gps"];
+  const allowedFields = ["currentAddress", "homeAddress", "gps", "currentAddressGps", "homeAddressGps"];
   const extraFields = Object.keys(req.body || {}).filter(
     (field) => !allowedFields.includes(field),
   );
@@ -15,7 +15,7 @@ const rejectUnexpectedAddressFields = (req, res, next) => {
   if (extraFields.length > 0) {
     return res.status(400).json({
       success: false,
-      message: "Only currentAddress, homeAddress, and gps can be updated.",
+      message: "Only currentAddress, homeAddress, gps, currentAddressGps, and homeAddressGps can be updated.",
       data: {
         fields: extraFields,
       },
@@ -23,6 +23,40 @@ const rejectUnexpectedAddressFields = (req, res, next) => {
   }
 
   next();
+};
+
+const validateGpsPoint = (value, { path }) => {
+  if (value === undefined || value === null) return true; // Optional
+  
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${path} must be a GeoJSON Point object.`);
+  }
+
+  if (value.type !== "Point") {
+    throw new Error(`${path}.type must be "Point".`);
+  }
+
+  if (!Array.isArray(value.coordinates) || value.coordinates.length !== 2) {
+    throw new Error(`${path}.coordinates must be an array with [longitude, latitude].`);
+  }
+
+  const [longitude, latitude] = value.coordinates;
+  const parsedLongitude = Number(longitude);
+  const parsedLatitude = Number(latitude);
+
+  if (!Number.isFinite(parsedLongitude) || !Number.isFinite(parsedLatitude)) {
+    throw new Error(`${path}.coordinates must contain valid numeric values.`);
+  }
+
+  if (parsedLongitude < -180 || parsedLongitude > 180) {
+    throw new Error("Longitude must be between -180 and 180.");
+  }
+
+  if (parsedLatitude < -90 || parsedLatitude > 90) {
+    throw new Error("Latitude must be between -90 and 90.");
+  }
+
+  return true;
 };
 
 const validateLocationUpdate = [
@@ -40,37 +74,19 @@ const validateLocationUpdate = [
     .withMessage("homeAddress is required."),
   body("gps")
     .custom((value) => {
-      if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error("gps must be a GeoJSON Point object.");
-      }
-
-      if (value.type !== "Point") {
-        throw new Error('gps.type must be "Point".');
-      }
-
-      if (!Array.isArray(value.coordinates) || value.coordinates.length !== 2) {
-        throw new Error("gps.coordinates must be an array with [longitude, latitude].");
-      }
-
-      const [longitude, latitude] = value.coordinates;
-      const parsedLongitude = Number(longitude);
-      const parsedLatitude = Number(latitude);
-
-      if (!Number.isFinite(parsedLongitude) || !Number.isFinite(parsedLatitude)) {
-        throw new Error("gps.coordinates must contain valid numeric values.");
-      }
-
-      if (parsedLongitude < -180 || parsedLongitude > 180) {
-        throw new Error("Longitude must be between -180 and 180.");
-      }
-
-      if (parsedLatitude < -90 || parsedLatitude > 90) {
-        throw new Error("Latitude must be between -90 and 90.");
-      }
-
-      return true;
+      // Retain original required behavior for gps
+      if (!value) throw new Error("gps must be a GeoJSON Point object.");
+      return validateGpsPoint(value, { path: "gps" });
     })
     .withMessage("Invalid gps payload."),
+  body("currentAddressGps")
+    .optional()
+    .custom(validateGpsPoint)
+    .withMessage("Invalid currentAddressGps payload."),
+  body("homeAddressGps")
+    .optional()
+    .custom(validateGpsPoint)
+    .withMessage("Invalid homeAddressGps payload."),
   (req, res, next) => {
     const errors = validationResult(req);
 
@@ -92,7 +108,7 @@ const validateLocationUpdate = [
 ];
 
 // @route   PATCH /api/users/profile
-// @desc    Update the authenticated User or Volunteer's current address, home address, and gps only
+// @desc    Update the authenticated User or Volunteer's profile addresses
 // @access  Protected (User, Volunteer)
 router.patch(
   "/profile",

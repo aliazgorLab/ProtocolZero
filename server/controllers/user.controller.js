@@ -82,19 +82,35 @@ exports.toggleVolunteerMode = async (req, res) => {
  */
 exports.updateProfileAddresses = async (req, res) => {
   try {
-    const { currentAddress, homeAddress, gps } = req.body;
+    const { currentAddress, homeAddress, gps, currentAddressGps, homeAddressGps } = req.body;
     const userId = req.user._id;
+
+    const updateData = {
+      currentAddress: currentAddress.trim(),
+      homeAddress: homeAddress.trim(),
+      gps: {
+        type: gps.type,
+        coordinates: gps.coordinates,
+      },
+    };
+
+    if (currentAddressGps) {
+      updateData.currentAddressGps = {
+        type: currentAddressGps.type,
+        coordinates: currentAddressGps.coordinates,
+      };
+    }
+
+    if (homeAddressGps) {
+      updateData.homeAddressGps = {
+        type: homeAddressGps.type,
+        coordinates: homeAddressGps.coordinates,
+      };
+    }
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      {
-        currentAddress: currentAddress.trim(),
-        homeAddress: homeAddress.trim(),
-        gps: {
-          type: gps.type,
-          coordinates: gps.coordinates,
-        },
-      },
+      updateData,
       {
         new: true,
         runValidators: true,

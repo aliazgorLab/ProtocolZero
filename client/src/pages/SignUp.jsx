@@ -1,29 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { registerUser, clearError } from '../features/auth/authSlice';
 
 const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isVerified, setIsVerified] = useState(false);
-  
+  const [name, setName] = useState('');
+  const [accountType, setAccountType] = useState('User');
+  const [phone, setPhone] = useState('');
+  const [countryCode, setCountryCode] = useState('+880');
+  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
+  const [homeAddress, setHomeAddress] = useState('');
+
+  const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { isLoading, isAuthenticated, error } = useSelector((state) => state.auth);
 
   const togglePassword = () => setShowPassword(!showPassword);
 
+  useEffect(() => {
+    dispatch(clearError());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/home', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    
-    // TODO: connect to real API for registration
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setIsVerified(true);
-      
-      // Auto redirect after successful signup
-      setTimeout(() => {
-        navigate('/otp-verification');
-      }, 1000);
-    }, 1500);
+    if (!name || !phone || !email || !homeAddress) return;
+
+    const fullPhone = `${countryCode}${phone.replace(/^0+/, '')}`;
+
+    dispatch(registerUser({
+      name,
+      phone: fullPhone,
+      email,
+      password,
+      accountType,
+      currentAddress: homeAddress,
+      homeAddress,
+    }));
   };
 
   return (
@@ -54,12 +74,14 @@ const SignUp = () => {
                 <label className="text-xs font-bold text-outline uppercase tracking-wider" htmlFor="full_name">Full Name</label>
                 <div className="relative group">
                   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">person</span>
-                  <input 
-                    className="w-full pl-10 pr-4 h-12 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none transition-all text-base" 
-                    id="full_name" 
-                    placeholder="John Doe" 
-                    required 
+                  <input
+                    className="w-full pl-10 pr-4 h-12 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none transition-all text-base"
+                    id="full_name"
+                    placeholder="John Doe"
+                    required
                     type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
                   />
                 </div>
               </div>
@@ -69,13 +91,13 @@ const SignUp = () => {
                 <label className="text-xs font-bold text-outline uppercase tracking-wider">Account Type</label>
                 <div className="flex gap-2">
                   <label className="flex-1 cursor-pointer">
-                    <input className="sr-only peer" name="role" type="radio" value="citizen" defaultChecked />
+                    <input className="sr-only peer" name="role" type="radio" value="User" checked={accountType === 'User'} onChange={() => setAccountType('User')} />
                     <div className="h-11 flex items-center justify-center rounded-lg border-2 border-outline-variant peer-checked:border-primary peer-checked:bg-primary-fixed peer-checked:text-on-primary-fixed-variant transition-all text-xs font-medium">
                       Citizen
                     </div>
                   </label>
                   <label className="flex-1 cursor-pointer">
-                    <input className="sr-only peer" name="role" type="radio" value="volunteer" />
+                    <input className="sr-only peer" name="role" type="radio" value="Volunteer" checked={accountType === 'Volunteer'} onChange={() => setAccountType('Volunteer')} />
                     <div className="h-11 flex items-center justify-center rounded-lg border-2 border-outline-variant peer-checked:border-primary peer-checked:bg-primary-fixed peer-checked:text-on-primary-fixed-variant transition-all text-xs font-medium">
                       Volunteer
                     </div>
@@ -88,7 +110,9 @@ const SignUp = () => {
                 <label className="text-xs font-bold text-outline uppercase tracking-wider" htmlFor="phone">Phone Number</label>
                 <div className="flex gap-1">
                   <div className="w-24 shrink-0 relative">
-                    <select className="w-full h-12 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none text-base appearance-none pl-3 pr-8 cursor-pointer">
+                    <select className="w-full h-12 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none text-base appearance-none pl-3 pr-8 cursor-pointer"
+                      value={countryCode}
+                      onChange={(e) => setCountryCode(e.target.value)}>
                       <option value="+1">+1</option>
                       <option value="+44">+44</option>
                       <option value="+91">+91</option>
@@ -96,12 +120,14 @@ const SignUp = () => {
                     </select>
                     <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-outline">arrow_drop_down</span>
                   </div>
-                  <input 
-                    className="flex-grow h-12 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none transition-all text-base px-4" 
-                    id="phone" 
-                    placeholder="555-0123" 
-                    required 
+                  <input
+                    className="flex-grow h-12 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none transition-all text-base px-4"
+                    id="phone"
+                    placeholder="1717xxxxxx"
+                    required
                     type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
                   />
                 </div>
               </div>
@@ -111,12 +137,14 @@ const SignUp = () => {
                 <label className="text-xs font-bold text-outline uppercase tracking-wider" htmlFor="password">Password</label>
                 <div className="relative group">
                   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">lock</span>
-                  <input 
-                    className="w-full pl-10 pr-12 h-12 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none transition-all text-base" 
-                    id="password" 
-                    placeholder="••••••••" 
-                    required 
+                  <input
+                    className="w-full pl-10 pr-12 h-12 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none transition-all text-base"
+                    id="password"
+                    placeholder="••••••••"
+                    required
                     type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                   />
                   <button 
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface-variant transition-colors p-1" 
@@ -130,19 +158,19 @@ const SignUp = () => {
                 </div>
               </div>
 
-              {/* Email (Optional) */}
+              {/* Email */}
               <div className="space-y-1">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold text-outline uppercase tracking-wider" htmlFor="email">Email Address</label>
-                  <span className="text-xs font-medium text-outline-variant">Optional</span>
-                </div>
+                <label className="text-xs font-bold text-outline uppercase tracking-wider" htmlFor="email">Email Address</label>
                 <div className="relative group">
                   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">mail</span>
-                  <input 
-                    className="w-full pl-10 pr-4 h-12 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none transition-all text-base" 
-                    id="email" 
-                    placeholder="email@example.com" 
+                  <input
+                    className="w-full pl-10 pr-4 h-12 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none transition-all text-base"
+                    id="email"
+                    placeholder="email@example.com"
+                    required
                     type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
               </div>
@@ -152,36 +180,41 @@ const SignUp = () => {
                 <label className="text-xs font-bold text-outline uppercase tracking-wider" htmlFor="address">Home Address</label>
                 <div className="relative group">
                   <span className="material-symbols-outlined absolute left-3 top-4 text-outline group-focus-within:text-primary transition-colors">home</span>
-                  <textarea 
-                    className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none transition-all text-base resize-none" 
-                    id="address" 
-                    placeholder="Street name, City, Postcode" 
-                    required 
+                  <textarea
+                    className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none transition-all text-base resize-none"
+                    id="address"
+                    placeholder="Street name, City, Postcode"
+                    required
                     rows="2"
+                    value={homeAddress}
+                    onChange={(e) => setHomeAddress(e.target.value)}
                   ></textarea>
                 </div>
               </div>
 
+              {/* Error Message */}
+              {error && (
+                <div className="bg-error-container text-on-error-container text-sm font-medium px-4 py-3 rounded-lg flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">error</span>
+                  {error}
+                </div>
+              )}
+
               {/* Submit Button */}
               <div className="pt-2">
-                <button 
-                  type="submit" 
-                  disabled={isSubmitting || isVerified}
+                <button
+                  type="submit"
+                  disabled={isLoading}
                   className={`w-full h-14 text-white text-xl font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 ${
-                    isVerified 
-                      ? 'bg-tertiary-container' 
+                    isLoading
+                      ? 'bg-primary/60 cursor-not-allowed'
                       : 'bg-primary hover:bg-primary-container active:scale-[0.98]'
                   }`}
                 >
-                  {isSubmitting ? (
+                  {isLoading ? (
                     <>
                       <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                      Securing Identity...
-                    </>
-                  ) : isVerified ? (
-                    <>
-                      <span className="material-symbols-outlined">check_circle</span>
-                      Account Verified
+                      Creating Account...
                     </>
                   ) : (
                     <>
