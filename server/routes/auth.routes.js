@@ -45,4 +45,14 @@ router.post("/register-vetted", authController.registerVettedProfessional);
 // @access  Protected (Requires Firebase Bearer Token in Headers)
 router.get("/me", verifyFirebaseAuth, authController.getCurrentUser);
 
+// @route   POST /api/auth/login-check
+// @desc    Step 1 of Login: Check if user requires Email OTP 2FA
+// @access  Protected (Requires Firebase Bearer Token)
+router.post("/login-check", verifyFirebaseAuth, authController.loginCheck);
+
+// @route   POST /api/auth/verify-otp
+// @desc    Step 2 of Login: Verify the 6-digit Email OTP
+// @access  Protected (Requires Firebase Bearer Token + OTP in body)
+router.post("/verify-otp", verifyFirebaseAuth, authController.verifyEmailOtp);
+
 module.exports = router;

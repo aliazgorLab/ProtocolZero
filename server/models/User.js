@@ -76,6 +76,11 @@ const userSchema = new mongoose.Schema(
       enum: ["police", "firefighter", "civilsurgeon", null],
       default: null,
     },
+
+    // --- EXTRA SECURITY LAYER (2FA) ---
+    twoFactorEnabled: { type: Boolean, default: false },
+    emailOtp: { type: String, default: null },
+    otpExpires: { type: Date, default: null },
   },
   { timestamps: true },
 );

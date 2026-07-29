@@ -15,7 +15,7 @@ const verifyFirebaseAuth = async (req, res, next) => {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
 
     const queryConditions = [
-      decodedToken.email ? { email: decodedToken.email } : null,
+      decodedToken.email ? { email: decodedToken.email.toLowerCase() } : null,
       decodedToken.phone_number ? { phone: decodedToken.phone_number } : null,
     ].filter(Boolean);
 

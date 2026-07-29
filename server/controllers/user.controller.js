@@ -137,3 +137,31 @@ exports.updateProfileAddresses = async (req, res) => {
     });
   }
 };
+
+/**
+ * Toggle Email OTP Two-Factor Authentication
+ */
+exports.toggleTwoFactor = async (req, res) => {
+  try {
+    const user = req.user;
+    const newStatus = !user.twoFactorEnabled;
+
+    user.twoFactorEnabled = newStatus;
+    user.emailOtp = null;
+    user.otpExpires = null;
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Extra security layer (Email OTP) is now ${newStatus ? "ENABLED" : "DISABLED"}.`,
+      data: { twoFactorEnabled: newStatus },
+    });
+  } catch (error) {
+    console.error("[ERROR] Toggle 2FA Failure:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while toggling security settings.",
+    });
+  }
+};
+

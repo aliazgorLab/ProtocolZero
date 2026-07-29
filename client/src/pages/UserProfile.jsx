@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import { logout } from '../features/auth/authSlice';
+import { useDispatch, useSelector } from 'react-redux';
+import { logout, updateUser } from '../features/auth/authSlice';
+import axiosInstance from '../api/axiosInstance';
 
 const UserProfile = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [dashOffset, setDashOffset] = useState(283); // 2 * PI * 45
+  const [toggling2FA, setToggling2FA] = useState(false);
+
+  const { user: currentUser } = useSelector((state) => state.auth);
 
   useEffect(() => {
     // Animate the reliability dial on mount
@@ -16,15 +20,32 @@ const UserProfile = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Mock Data
-  const user = {
-    name: 'Guardian-1',
-    role: 'Response Team',
-    status: 'Verified Reporter',
-    joined: 'Oct 2023',
-    reliability: 98,
+  const handleToggle2FA = async () => {
+    if (toggling2FA) return;
+    setToggling2FA(true);
+    try {
+      const response = await axiosInstance.patch('/users/toggle-2fa');
+      if (response.data.success) {
+        dispatch(updateUser({ twoFactorEnabled: response.data.data.twoFactorEnabled }));
+      }
+    } catch (error) {
+      console.error('Failed to toggle 2FA:', error);
+      alert(error.response?.data?.message || 'Failed to toggle 2FA settings.');
+    } finally {
+      setToggling2FA(false);
+    }
+  };
+
+  // Merge database user attributes with mock UI metrics
+  const displayUser = {
+    name: currentUser?.name || 'Guardian-1',
+    role: currentUser?.accountType || 'Response Team',
+    status: currentUser?.verificationStatus === 'verified' ? 'Verified Citizen' : 'Pending Verification',
+    joined: currentUser?.createdAt ? new Date(currentUser.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short' }) : 'Oct 2023',
+    reliability: currentUser?.score !== undefined ? currentUser.score : 98,
     reports: 124,
-    upvotes: '2.1k'
+    upvotes: '2.1k',
+    twoFactorEnabled: currentUser?.twoFactorEnabled || false
   };
 
   return (
@@ -47,28 +68,28 @@ const UserProfile = () => {
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-black text-primary">{user.reliability}%</span>
+            <span className="text-2xl font-black text-primary">{displayUser.reliability}%</span>
             <span className="text-[8px] font-bold uppercase tracking-widest text-on-surface-variant">Reliability</span>
           </div>
         </div>
         
         <div className="flex-1 text-center md:text-left space-y-2">
           <div className="flex flex-col md:flex-row md:items-center gap-2">
-            <h2 className="text-xl font-bold">{user.name}</h2>
+            <h2 className="text-xl font-bold">{displayUser.name}</h2>
             <span className="inline-flex items-center px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed text-xs font-bold uppercase tracking-wider self-center md:self-auto">
-              {user.status}
+              {displayUser.status}
             </span>
           </div>
-          <p className="text-sm text-on-surface-variant">{user.role} • Active since {user.joined}</p>
+          <p className="text-sm text-on-surface-variant">{displayUser.role} • Active since {displayUser.joined}</p>
           
           <div className="flex flex-wrap justify-center md:justify-start gap-2 mt-4">
             <div className="px-3 py-2 bg-surface-container-low rounded-lg border border-outline-variant flex items-center gap-2">
               <span className="material-symbols-outlined text-primary text-sm fill-icon">verified</span>
-              <span className="text-xs font-medium">{user.reports} Reports</span>
+              <span className="text-xs font-medium">{displayUser.reports} Reports</span>
             </div>
             <div className="px-3 py-2 bg-surface-container-low rounded-lg border border-outline-variant flex items-center gap-2">
               <span className="material-symbols-outlined text-primary text-sm fill-icon">thumb_up</span>
-              <span className="text-xs font-medium">{user.upvotes} Upvotes</span>
+              <span className="text-xs font-medium">{displayUser.upvotes} Upvotes</span>
             </div>
           </div>
         </div>
@@ -182,13 +203,26 @@ const UserProfile = () => {
                 </div>
                 <span className="material-symbols-outlined text-outline">chevron_right</span>
               </Link>
-              <Link to="#" className="flex items-center justify-between p-4 hover:bg-surface-container transition-colors">
+              <div className="flex items-center justify-between p-4 hover:bg-surface-container transition-colors">
                 <div className="flex items-center gap-3">
                   <span className="material-symbols-outlined text-on-surface-variant">security</span>
-                  <span className="text-base">Privacy & Security</span>
+                  <div className="flex flex-col">
+                    <span className="text-base">Two-Factor OTP</span>
+                    <span className="text-xs text-on-surface-variant">Enable OTP for elevated security</span>
+                  </div>
                 </div>
-                <span className="material-symbols-outlined text-outline">chevron_right</span>
-              </Link>
+                <button 
+                  onClick={handleToggle2FA}
+                  disabled={toggling2FA}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors min-w-[80px] text-center ${
+                    displayUser.twoFactorEnabled 
+                      ? 'bg-primary text-white hover:bg-primary/95' 
+                      : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'
+                  }`}
+                >
+                  {toggling2FA ? '...' : displayUser.twoFactorEnabled ? 'Enabled' : 'Disabled'}
+                </button>
+              </div>
               <button onClick={() => { dispatch(logout()); navigate('/login'); }} className="w-full flex items-center justify-between p-4 hover:bg-surface-container transition-colors text-error">
                 <div className="flex items-center gap-3">
                   <span className="material-symbols-outlined">logout</span>

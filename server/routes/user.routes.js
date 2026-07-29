@@ -129,4 +129,13 @@ router.patch(
   userController.toggleVolunteerMode,
 );
 
+// @route   PATCH /api/users/toggle-2fa
+// @desc    Toggle Email OTP Two-Factor Authentication
+// @access  Protected
+router.patch(
+  "/toggle-2fa",
+  verifyFirebaseAuth,
+  userController.toggleTwoFactor,
+);
+
 module.exports = router;

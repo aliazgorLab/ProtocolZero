@@ -2,6 +2,7 @@ const admin = require("../config/firebase");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const { validationResult } = require("express-validator");
+const { sendEmail } = require("../utils/email");
 
 // 1. Standard Citizen Registration/Sync Endpoint
 exports.registerOrSyncUser = async (req, res) => {
@@ -25,8 +26,9 @@ exports.registerOrSyncUser = async (req, res) => {
       req.body;
 
     // Prevent duplicate account creation by checking unique email or phone
+    const targetEmail = (email || decodedToken.email || "").toLowerCase();
     let existingUser = await User.findOne({
-      $or: [{ phone: phone }, { email: email || decodedToken.email }],
+      $or: [{ phone: phone }, { email: targetEmail }],
     });
 
     if (existingUser) {
@@ -127,8 +129,9 @@ exports.registerVettedProfessional = async (req, res) => {
     }
 
     // 3. Check for duplicate credentials in MongoDB
+    const targetEmail = (email || decodedToken.email || "").toLowerCase();
     const existingUser = await User.findOne({
-      $or: [{ phone }, { email: email || decodedToken.email }, { nid }],
+      $or: [{ phone }, { email: targetEmail }, { nid }],
     });
 
     if (existingUser) {
@@ -214,3 +217,119 @@ exports.getCurrentUser = async (req, res) => {
     });
   }
 };
+
+// @desc    Step 1 of Login: Check if user requires Email OTP 2FA
+// @route   POST /api/auth/login-check
+// @access  Protected (Requires Firebase Bearer Token)
+exports.loginCheck = async (req, res) => {
+  try {
+    const user = req.user;
+
+    // Case A: Extra security layer is turned OFF -> Immediate Login
+    if (!user.twoFactorEnabled) {
+      return res.status(200).json({
+        success: true,
+        requiresOtp: false,
+        message: "Login successful.",
+        data: user,
+      });
+    }
+
+    // Case B: Extra security layer is turned ON -> Generate 6-Digit OTP
+    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiryTime = new Date(Date.now() + 10 * 60 * 1000); // Expires in 10 minutes
+
+    user.emailOtp = generatedOtp;
+    user.otpExpires = expiryTime;
+    await user.save();
+
+    console.log(`\n=========================================`);
+    console.log(`[DEV OTP ALERT] Code for ${user.email}: [ ${generatedOtp} ]`);
+    console.log(`=========================================\n`);
+
+    // Call helper to send real email (or simulate in console if env is empty)
+    await sendEmail({
+      to: user.email,
+      subject: "Your Protocol Zero Verification Code",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 8px; background-color: #ffffff;">
+          <h2 style="color: #6200ee; text-align: center;">Protocol Zero</h2>
+          <h3 style="color: #333333; text-align: center; margin-top: 0;">Secure Two-Factor Authentication</h3>
+          <p>Hello,</p>
+          <p>You are receiving this message because two-factor authentication is enabled for your account. Please use the following 6-digit code to log in:</p>
+          <div style="font-size: 28px; font-weight: bold; text-align: center; letter-spacing: 6px; padding: 15px; background-color: #f3e8ff; border: 1px dashed #6200ee; border-radius: 6px; margin: 20px 0; color: #6200ee;">
+            ${generatedOtp}
+          </div>
+          <p>This code is valid for 10 minutes. If you did not request this login, please change your password immediately.</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;">
+          <p style="font-size: 11px; color: #999; text-align: center;">This is a system generated notification. Please do not reply directly to this email.</p>
+        </div>
+      `,
+    });
+
+    return res.status(202).json({
+      success: true,
+      requiresOtp: true,
+      message: `An OTP has been sent to ${user.email}. Please verify to complete login.`,
+      email: user.email,
+    });
+  } catch (error) {
+    console.error("[ERROR] Login Check Failure:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error during login verification.",
+    });
+  }
+};
+
+// @desc    Step 2 of Login: Verify the 6-digit Email OTP
+// @route   POST /api/auth/verify-otp
+// @access  Protected (Requires Firebase Bearer Token + OTP in body)
+exports.verifyEmailOtp = async (req, res) => {
+  try {
+    const { otp } = req.body;
+    const user = req.user;
+
+    if (!otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide the 6-digit OTP code.",
+      });
+    }
+
+    // 1. Check if OTP matches
+    if (user.emailOtp !== otp) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid OTP code. Please try again.",
+      });
+    }
+
+    // 2. Check if OTP has expired
+    if (user.otpExpires < new Date()) {
+      return res.status(401).json({
+        success: false,
+        message: "OTP code has expired. Please request a new one.",
+      });
+    }
+
+    // 3. Success! Clear the OTP fields from database so code cannot be reused
+    user.emailOtp = null;
+    user.otpExpires = null;
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      requiresOtp: false,
+      message: "Two-factor authentication verified. Welcome back!",
+      data: user,
+    });
+  } catch (error) {
+    console.error("[ERROR] OTP Verification Failure:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error during OTP verification.",
+    });
+  }
+};
+
