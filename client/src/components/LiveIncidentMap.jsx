@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { GoogleMap, useLoadScript, InfoWindow } from '@react-google-maps/api';
 import { MarkerClusterer } from '@googlemaps/markerclusterer';
 import axiosInstance from '../api/axiosInstance';
-import socket from '../services/socket';
+import useSocket from '../hooks/useSocket';
 
 /**
  * LiveIncidentMap Component
@@ -36,7 +36,7 @@ const getMarkerIcon = (status) => {
   let color = 'yellow'; // pending
   if (status === 'resolved') color = 'green';
   if (status === 'escalated') color = 'red';
-  
+
   return `http://maps.google.com/mapfiles/ms/icons/${color}-dot.png`;
 };
 
@@ -44,7 +44,7 @@ const getMarkerIcon = (status) => {
 const Clusterer = ({ reports, map, onSelect }) => {
   useEffect(() => {
     if (!map || !window.google) return;
-    
+
     const markers = reports.map((report) => {
       // GeoJSON: coordinates are [longitude, latitude]
       const lat = report.location?.coordinates[1] || center.lat;
@@ -73,6 +73,7 @@ const Clusterer = ({ reports, map, onSelect }) => {
 };
 
 const LiveIncidentMap = () => {
+  const socket = useSocket();
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
   });
@@ -97,7 +98,7 @@ const LiveIncidentMap = () => {
         console.error("Error fetching nearby reports:", error);
       }
     };
-    
+
     fetchReports();
   }, []);
 
@@ -107,13 +108,13 @@ const LiveIncidentMap = () => {
     };
 
     const handleUpdateReport = (updatedReport) => {
-      setReports((prev) => 
+      setReports((prev) =>
         prev.map(r => r._id === updatedReport._id ? updatedReport : r)
       );
     };
 
     const handleEscalatedReport = (escalatedReport) => {
-      setReports((prev) => 
+      setReports((prev) =>
         prev.map(r => r._id === escalatedReport._id ? { ...r, status: escalatedReport.status } : r)
       );
     };
@@ -172,20 +173,19 @@ const LiveIncidentMap = () => {
 
         {selectedReport && selectedReport.location && (
           <InfoWindow
-            position={{ 
-              lat: selectedReport.location.coordinates[1], 
-              lng: selectedReport.location.coordinates[0] 
+            position={{
+              lat: selectedReport.location.coordinates[1],
+              lng: selectedReport.location.coordinates[0]
             }}
             onCloseClick={() => setSelectedReport(null)}
           >
             <div className="p-3 max-w-xs bg-white text-gray-800 rounded">
               <h3 className="font-bold text-lg mb-1 border-b pb-1">{selectedReport.title}</h3>
               <p className="text-sm mt-2 flex items-center gap-2">
-                <span className="font-medium text-gray-600">Status:</span> 
-                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${
-                  selectedReport.status === 'escalated' ? 'bg-red-100 text-red-700' : 
-                  selectedReport.status === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                }`}>
+                <span className="font-medium text-gray-600">Status:</span>
+                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${selectedReport.status === 'escalated' ? 'bg-red-100 text-red-700' :
+                    selectedReport.status === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                  }`}>
                   {selectedReport.status}
                 </span>
               </p>

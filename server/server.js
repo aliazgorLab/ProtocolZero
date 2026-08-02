@@ -1,5 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const http = require("http");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
@@ -12,8 +13,10 @@ const reportRoutes = require("./routes/report.routes");
 const userRoutes = require("./routes/user.routes");
 const notificationRoutes = require("./routes/notification.routes");
 const resourceRoutes = require("./routes/resource.routes");
+const { initializeSocket } = require("./socket");
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 
 const sanitize = require("./middleware/sanitize");
@@ -34,6 +37,10 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/resources", resourceRoutes);
+
+// Attach Socket.io to the shared HTTP server so real-time events can reuse the same port.
+const io = initializeSocket(server);
+app.set("io", io);
 
 // --- 3. Health Check / Test Route ---
 app.get("/api/health", (req, res) => {
@@ -66,7 +73,7 @@ const startServer = async () => {
     );
 
     // Launch Express Server only after DB connection is established
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(
         `Server running in ${process.env.NODE_ENV || "development"} mode on port ${PORT}`,
       );

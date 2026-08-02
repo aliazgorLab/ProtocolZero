@@ -5,6 +5,22 @@ const Notification = require("../models/Notification");
 
 const reportService = require("../services/report.service");
 const SYSTEM = require("../constants/system");
+const {
+  emitReportToGeoRooms,
+  emitVictimAttached,
+} = require("../socket");
+
+const buildLeanReportPayload = (report) => ({
+  _id: report._id,
+  postId: report.postId,
+  type: report.type,
+  status: report.status,
+  coordinates: report.location?.coordinates || [],
+  vote: {
+    upvote: report.vote?.upvote || 0,
+    downvote: report.vote?.downvote || 0,
+  },
+});
 
 // @desc    Create a new emergency incident report
 // @route   POST /api/reports
@@ -136,6 +152,8 @@ exports.createReport = async (req, res) => {
         }
       }
     });
+
+    emitReportToGeoRooms("report:new", newReport, buildLeanReportPayload(newReport));
 
     return res.status(201).json({
       success: true,
@@ -365,6 +383,8 @@ exports.voteOnReport = async (req, res) => {
 
     await report.save();
 
+    emitReportToGeoRooms("report:vote", report, buildLeanReportPayload(report));
+
     return res.status(200).json({
       success: true,
       message: "Vote recorded successfully.",
@@ -466,6 +486,21 @@ exports.registerVictim = async (req, res) => {
         "victims.userId",
         "name accountType face currentAddress homeAddress gps phone email",
       );
+
+    emitVictimAttached({
+      reportId: updatedReport._id,
+      postId: updatedReport.postId,
+      type: updatedReport.type,
+      status: updatedReport.status,
+      coordinates: updatedReport.location?.coordinates || [],
+      vote: {
+        upvote: updatedReport.vote?.upvote || 0,
+        downvote: updatedReport.vote?.downvote || 0,
+      },
+      victimId: req.user._id,
+      gpsStatus: gpsStatus || "success",
+      gpsFallback: gpsStatus === "failed",
+    });
 
     return res.status(200).json({
       success: true,
