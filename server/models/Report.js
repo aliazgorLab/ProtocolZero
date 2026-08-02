@@ -48,7 +48,32 @@ const reportSchema = new mongoose.Schema(
     description: { type: String, default: null },
     image: [{ type: String }], // Array of image URLs/Cloudinary links
 
-    victims: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    victims: [
+      {
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        gpsStatus: { type: String, enum: ["success", "failed"], default: "success" },
+        gpsFallback: { type: Boolean, default: false },
+      },
+    ],
+
+    resourcesNeeded: [
+      {
+        itemName: { type: String, required: true },
+        quantity: { type: Number, required: true, min: 0 },
+        unit: { type: String, required: true },
+      },
+    ],
+
+    resourcesCommitted: [
+      {
+        providerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        itemName: { type: String, required: true },
+        quantity: { type: Number, required: true, min: 0 },
+        unit: { type: String, required: true },
+        createdAt: { type: Date, default: Date.now },
+        location: { type: pointSchema, default: null },
+      },
+    ],
 
     // --- Community Verification Engine ---
     vote: {
@@ -79,6 +104,19 @@ const reportSchema = new mongoose.Schema(
           required: true,
         },
         createdAt: { type: Date, default: Date.now },
+      },
+    ],
+
+    // --- Tracking & History ---
+    updaterId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    closedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    closedAt: { type: Date },
+
+    editHistory: [
+      {
+        editorId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        editedAt: { type: Date, default: Date.now },
+        previousState: { type: mongoose.Schema.Types.Mixed },
       },
     ],
   },

@@ -35,10 +35,12 @@ router.post(
   authController.registerOrSyncUser,
 );
 
+const { validateRegisterVetted } = require("../middleware/validators");
+
 // @route   POST /api/auth/register-vetted
 // @desc    Register a vetted professional (Reporter or ResponseTeam)
 // @access  Protected (Requires Firebase Bearer Token in Headers)
-router.post("/register-vetted", authController.registerVettedProfessional);
+router.post("/register-vetted", validateRegisterVetted, authController.registerVettedProfessional);
 
 // @route   GET /api/auth/me
 // @desc    Get current logged-in user profile, even when pending verification

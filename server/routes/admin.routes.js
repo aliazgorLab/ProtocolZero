@@ -8,5 +8,7 @@ router.use(verifyFirebaseAuth, authorizeRoles("Admin", "SuperAdmin"));
 
 router.get("/pending-users", adminController.getPendingUsers);
 router.patch("/users/:userId/verify", adminController.verifyUser);
+router.get("/flagged-users", adminController.getFlaggedUsers);
+router.patch("/reports/:id/reliability", adminController.restoreReportReliability);
 
 module.exports = router;

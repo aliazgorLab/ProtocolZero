@@ -108,7 +108,9 @@ The frontend and the business logic both code against these. Freeze the contract
 ### Tasks
 
 **2.1 Schema fixes**
-- Add `resourcesCommitted: [{ providerId, itemName, quantity, unit, createdAt }]` to `Report` — makes the volunteer guard real.
+- Add `resourcesNeeded: [{ itemName, quantity, unit }]` to `Report`.
+- Add `resourcesCommitted: [{ providerId, itemName, quantity, unit, createdAt, location }]` to `Report`.
+- Add `editHistory: [{ editorId, editedAt, previousState }]`, plus `updaterId`, `closedBy`, and `closedAt` to `Report` for robust accountability.
 - Add `gpsStatus` and `gpsFallback` to the victim entries in `Report` — the fallback has nowhere to be stored right now.
 - **Careful:** turning `victims[]` into subdocuments breaks any `.populate('victims')` — becomes `.populate('victims.userId')`.
 
@@ -123,13 +125,15 @@ The frontend and the business logic both code against these. Freeze the contract
 - User comes from `req.user._id`, never the body. Check ownership before marking read.
 - **Verify:** seed 5, GET unread-first, mark 2, GET again.
 
-**2.4 Resources API**
-- `PATCH /api/resources/inventory` and `PATCH /api/reports/:id/resources`. Volunteer/ResponseTeam only.
-- **Verify:** commit a resource → `toggleVolunteerMode` returns 409.
+**2.4 Resources API (Decoupled Logic)**
+- `PATCH /api/reports/:id/resources-needed`: Only the Report Author can list/decrease required supplies. No automated math.
+- `PATCH /api/reports/:id/resources`: **ResponseTeam only.** Pushes official assets (e.g., firetrucks) with their coordinates publicly.
+- `PATCH /api/resources/inventory/deduct`: **Volunteers only.** Deducts supplies from their personal profile inventory when they deploy. They do not edit the report directly; coordination is done purely through the comments array.
 
-**2.5 Close route**
-- Pull closing out of `updateReport` into `PATCH /api/reports/:id/close`, Reporter/Admin only. Sets `closedBy`, `closedAt`, and a final `reliability` of `valid` or `false`.
-- Closing an already-closed report → 409, so the score can't be applied twice.
+**2.5 Report Edits & Close Route**
+- **Strict RBAC Rule:** If authored by a Reporter, only that Author or Admin can edit/close. If authored by a User/Volunteer, the Author, ANY Reporter, or Admin can edit/close.
+- **Edit History:** `updateReport` must take a full snapshot of the report's current state and push it into `editHistory` before saving changes.
+- **Close Route:** Pulled closing out into `PATCH /api/reports/:id/close`. Sets `closedBy`, `closedAt`, and a final `reliability` of `valid` or `false`. Closing an already-closed report → 409.
 
 **2.6 Admin endpoints**
 - `GET /api/admin/flagged-users` (score below threshold) and `PATCH /api/admin/reports/:id/reliability` so a wrongly-flagged report can be restored. Without the second one, a false positive is permanent.

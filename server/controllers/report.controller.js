@@ -118,7 +118,7 @@ exports.createReport = async (req, res) => {
         }
       }
 
-      if (type === "major" && req.user.accountType === "Reporter") {
+      if (type === "major") {
         const recipients = await User.find({
           accountType: { $in: ["User", "Volunteer", "ResponseTeam"] },
         })
@@ -211,7 +211,7 @@ exports.getReportById = async (req, res) => {
       .populate("issuerId", "name accountType face")
       .populate("comments.commenterId", "name accountType face")
       .populate(
-        "victims",
+        "victims.userId",
         "name accountType face currentAddress homeAddress gps phone email",
       );
 
@@ -231,11 +231,14 @@ exports.getReportById = async (req, res) => {
     ].includes(req.user.accountType);
 
     if (!isVettedResponder && Array.isArray(reportData.victims)) {
-      reportData.victims = reportData.victims.map((victim) => ({
-        _id: victim._id,
-        name: victim.name,
-        face: victim.face,
-      }));
+      reportData.victims = reportData.victims.map((victim) => {
+        const u = victim.userId || victim;
+        return {
+          _id: u._id,
+          name: u.name,
+          face: u.face,
+        };
+      });
     }
 
     return res.status(200).json({
@@ -388,7 +391,7 @@ exports.registerVictim = async (req, res) => {
 
   try {
     const { id } = req.params;
-    const { gps } = req.body;
+    const { gps, gpsStatus } = req.body;
     const userId = req.user._id;
 
     const report = await reportService.resolveReportById(id);
@@ -409,7 +412,7 @@ exports.registerVictim = async (req, res) => {
 
     const userIdString = userId.toString();
     const alreadyAttachedToReport = Array.isArray(report.victims)
-      ? report.victims.some((victimId) => victimId.toString() === userIdString)
+      ? report.victims.some((victim) => victim.userId.toString() === userIdString)
       : false;
 
     if (alreadyAttachedToReport) {
@@ -446,8 +449,8 @@ exports.registerVictim = async (req, res) => {
       }
 
       const reportUpdate = await Report.updateOne(
-        { _id: report._id, status: "active", victims: { $ne: userId } },
-        { $addToSet: { victims: userId } },
+        { _id: report._id, status: "active", "victims.userId": { $ne: userId } },
+        { $addToSet: { victims: { userId: userId, gpsStatus: gpsStatus || "success", gpsFallback: gpsStatus === "failed" } } },
         { session },
       );
 
@@ -460,7 +463,7 @@ exports.registerVictim = async (req, res) => {
       .populate("issuerId", "name accountType face")
       .populate("comments.commenterId", "name accountType face")
       .populate(
-        "victims",
+        "victims.userId",
         "name accountType face currentAddress homeAddress gps phone email",
       );
 
@@ -501,7 +504,6 @@ exports.updateReport = async (req, res) => {
       description,
       category,
       images,
-      status,
       location,
       impactAreas,
       type,
@@ -520,24 +522,50 @@ exports.updateReport = async (req, res) => {
     }
 
     const isAuthor = report.issuerId._id.toString() === req.user._id.toString();
+    const isAdmin = ["Admin", "SuperAdmin"].includes(req.user.accountType);
     const isTargetAuthorReporter = report.issuerId.accountType === "Reporter";
-    const editorType = req.user.accountType;
 
-    if (!isAuthor) {
-      if (editorType === "Reporter") {
-        if (isTargetAuthorReporter) {
-          return res.status(403).json({
-            success: false,
-            message:
-              "Forbidden: A Reporter cannot edit or override a report issued by another verified Reporter.",
-          });
-        }
-      } else if (!["Admin", "SuperAdmin"].includes(editorType)) {
-        return res.status(403).json({
-          success: false,
-          message: "Forbidden: You do not have permission to edit this report.",
-        });
+    let canEdit = false;
+
+    if (isAdmin) {
+      canEdit = true;
+    } else if (isTargetAuthorReporter) {
+      // If the author is a Reporter, only that author or an Admin can edit.
+      if (isAuthor) canEdit = true;
+    } else {
+      // If the author is a normal user or volunteer, the author, or ANY Reporter (or Admin) can edit.
+      if (isAuthor || req.user.accountType === "Reporter") {
+        canEdit = true;
       }
+    }
+
+    if (!canEdit) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: You do not have permission to edit this report.",
+      });
+    }
+
+    const updatesProvided = [description, category, images, location, impactAreas, type].some(val => val !== undefined);
+
+    if (updatesProvided) {
+      // Snapshot the current state before making changes
+      const previousState = {
+        description: report.description,
+        category: report.category,
+        image: report.image,
+        location: report.location,
+        impactAreas: report.impactAreas,
+        type: report.type,
+      };
+
+      report.editHistory.push({
+        editorId: req.user._id,
+        editedAt: new Date(),
+        previousState,
+      });
+
+      report.updaterId = req.user._id;
     }
 
     if (description !== undefined) report.description = description;
@@ -555,16 +583,6 @@ exports.updateReport = async (req, res) => {
     }
     if (impactAreas !== undefined) report.impactAreas = impactAreas;
     if (type !== undefined) report.type = type;
-
-    if (status === "closed") {
-      report.status = "closed";
-      report.closedBy = req.user._id;
-      report.closedAt = new Date();
-    }
-
-    if (!isAuthor) {
-      report.updaterId = req.user._id;
-    }
 
     await report.save();
 
@@ -638,6 +656,142 @@ exports.deleteReport = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error while deleting report.",
+    });
+  }
+};
+
+// @desc    Close a report
+// @route   PATCH /api/reports/:id/close
+// @access  Protected (Reporter, Admin, SuperAdmin)
+exports.closeReport = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reliability } = req.body;
+
+    if (!["valid", "false"].includes(reliability)) {
+      return res.status(400).json({
+        success: false,
+        message: "reliability must be 'valid' or 'false' when closing a report.",
+      });
+    }
+
+    const report = await reportService.resolveReportById(id).populate("issuerId", "accountType");
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        message: "Report not found.",
+      });
+    }
+
+    if (report.status === "closed") {
+      return res.status(409).json({
+        success: false,
+        message: "Report is already closed.",
+      });
+    }
+
+    const isAuthor = report.issuerId._id.toString() === req.user._id.toString();
+    const isAdmin = ["Admin", "SuperAdmin"].includes(req.user.accountType);
+    const isTargetAuthorReporter = report.issuerId.accountType === "Reporter";
+
+    let canClose = false;
+
+    if (isAdmin) {
+      canClose = true;
+    } else if (isTargetAuthorReporter) {
+      // If the author is a Reporter, only that author or an Admin can close it.
+      if (isAuthor) canClose = true;
+    } else {
+      // If the author is a normal user or volunteer, the author, or ANY Reporter (or Admin) can close it.
+      if (isAuthor || req.user.accountType === "Reporter") {
+        canClose = true;
+      }
+    }
+
+    if (!canClose) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: You do not have permission to close this report.",
+      });
+    }
+
+    report.status = "closed";
+    report.closedBy = req.user._id;
+    report.closedAt = new Date();
+    report.reliability = reliability;
+
+    await report.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Report closed successfully.",
+      data: report,
+    });
+  } catch (error) {
+    console.error("[ERROR] Close Report Failure:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while closing report.",
+    });
+  }
+};
+
+// @desc    Update resources needed by the report author
+// @route   PATCH /api/reports/:id/resources-needed
+// @access  Protected (Report Author Only)
+exports.updateResourcesNeeded = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { resourcesNeeded } = req.body;
+
+    if (!Array.isArray(resourcesNeeded)) {
+      return res.status(400).json({
+        success: false,
+        message: "resourcesNeeded must be an array of items.",
+      });
+    }
+
+    const report = await reportService.resolveReportById(id);
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        message: "Report not found.",
+      });
+    }
+
+    // Only the author can update this
+    if (report.issuerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: Only the original report author can update resources needed.",
+      });
+    }
+
+    // Basic validation on items
+    for (const item of resourcesNeeded) {
+      if (!item.itemName || item.quantity == null || !item.unit) {
+        return res.status(400).json({
+          success: false,
+          message: "Each resource needed must have itemName, quantity, and unit.",
+        });
+      }
+    }
+
+    report.resourcesNeeded = resourcesNeeded;
+    await report.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Required resources updated successfully.",
+      data: report.resourcesNeeded,
+    });
+  } catch (error) {
+    console.error("[ERROR] Update Resources Needed Failure:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while updating resources needed.",
     });
   }
 };

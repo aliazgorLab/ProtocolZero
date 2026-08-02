@@ -10,11 +10,14 @@ const authRoutes = require("./routes/auth.routes");
 const adminRoutes = require("./routes/admin.routes");
 const reportRoutes = require("./routes/report.routes");
 const userRoutes = require("./routes/user.routes");
+const notificationRoutes = require("./routes/notification.routes");
+const resourceRoutes = require("./routes/resource.routes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// --- 2. Security & Utility Middlewares ---
+const sanitize = require("./middleware/sanitize");
+
 app.use(helmet());
 app.use(
   cors({
@@ -24,10 +27,13 @@ app.use(
 );
 app.use(morgan("dev")); // Logs HTTP requests to the terminal
 app.use(express.json()); // Parses incoming JSON payloads
+app.use(sanitize); // Sanitize inputs globally
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/resources", resourceRoutes);
 
 // --- 3. Health Check / Test Route ---
 app.get("/api/health", (req, res) => {
@@ -38,7 +44,13 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// --- 4. Database Connection & Server Initialization ---
+// --- 4. Fallback Error Handler ---
+app.use((err, req, res, next) => {
+  console.error("[ERROR] Uncaught Exception:", err.stack);
+  res.status(500).json({ success: false, message: "Internal server error." });
+});
+
+// --- 5. Database Connection & Server Initialization ---
 const startServer = async () => {
   try {
     if (!process.env.MONGO_URI) {
