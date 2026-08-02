@@ -4,6 +4,7 @@ const User = require("../models/User");
 const Notification = require("../models/Notification");
 
 const reportService = require("../services/report.service");
+const SYSTEM = require("../constants/system");
 
 // @desc    Create a new emergency incident report
 // @route   POST /api/reports
@@ -160,7 +161,7 @@ exports.createReport = async (req, res) => {
 // @access  Protected
 exports.getNearbyReports = async (req, res) => {
   try {
-    const { lng, lat, radius = 5000 } = req.query;
+    const { lng, lat, radius = SYSTEM.NEARBY_DEFAULT_RADIUS_M } = req.query;
 
     if (!lng || !lat) {
       return res.status(400).json({

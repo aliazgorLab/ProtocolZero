@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GoogleMap, useLoadScript, InfoWindow } from '@react-google-maps/api';
 import { MarkerClusterer } from '@googlemaps/markerclusterer';
-import axios from 'axios';
+import axiosInstance from '../api/axiosInstance';
 import socket from '../services/socket';
 
 /**
@@ -85,12 +85,14 @@ const LiveIncidentMap = () => {
     // Fetch initial reports
     const fetchReports = async () => {
       try {
-        const response = await axios.get('/api/reports/nearby');
-        if (response.data) {
-          // Adjust according to the actual response structure (e.g. response.data.reports)
-          const data = Array.isArray(response.data) ? response.data : (response.data.reports || []);
-          setReports(data);
-        }
+        const response = await axiosInstance.get('/reports/nearby', {
+          params: {
+            lng: center.lng,
+            lat: center.lat,
+          },
+        });
+
+        setReports(Array.isArray(response.data?.data) ? response.data.data : []);
       } catch (error) {
         console.error("Error fetching nearby reports:", error);
       }

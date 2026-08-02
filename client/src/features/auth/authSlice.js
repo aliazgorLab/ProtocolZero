@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
+import axiosInstance from '../../api/axiosInstance';
 
 const FIREBASE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY;
 
@@ -18,8 +19,8 @@ export const loginUser = createAsyncThunk(
 
       const idToken = firebaseRes.data.idToken;
 
-      const checkRes = await axios.post(
-        'http://localhost:5000/api/auth/login-check',
+      const checkRes = await axiosInstance.post(
+        '/auth/login-check',
         {},
         { headers: { Authorization: `Bearer ${idToken}` } },
       );
@@ -42,8 +43,8 @@ export const verifyOtp = createAsyncThunk(
   'auth/verifyOtp',
   async ({ otp, tempToken }, { rejectWithValue }) => {
     try {
-      const response = await axios.post(
-        'http://localhost:5000/api/auth/verify-otp',
+      const response = await axiosInstance.post(
+        '/auth/verify-otp',
         { otp },
         { headers: { Authorization: `Bearer ${tempToken}` } },
       );
@@ -90,8 +91,8 @@ export const registerUser = createAsyncThunk(
         }
       }
 
-      const backendRes = await axios.post(
-        'http://localhost:5000/api/auth/register',
+      const backendRes = await axiosInstance.post(
+        '/auth/register',
         {
           name: userData.name,
           phone: userData.phone,

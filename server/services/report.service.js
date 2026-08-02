@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Report = require("../models/Report");
 const User = require("../models/User");
+const SYSTEM = require("../constants/system");
 
 const generatePostId = () => {
   const timestampPart = Date.now().toString(36).toUpperCase();
@@ -54,8 +55,7 @@ const buildMinorReportNotifications = (report, recipientIds) => {
 
 const getNearbyMinorReportRecipients = async (report, excludeUserId) => {
   const searchRadiusMeters = 1000;
-  const earthRadiusMeters = 6378137;
-  const searchRadiusRadians = searchRadiusMeters / earthRadiusMeters;
+  const searchRadiusRadians = searchRadiusMeters / SYSTEM.EARTH_RADIUS_M;
 
   const nearbyUsers = await User.find({
     _id: { $ne: excludeUserId },
@@ -91,8 +91,13 @@ const getNearbyMinorReportRecipients = async (report, excludeUserId) => {
 };
 
 const findDuplicateReport = async (type, category, location) => {
-  const radiusMeters = type === "major" ? 500 : 100;
-  const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const radiusMeters =
+    type === "major"
+      ? SYSTEM.DUPLICATE_RADIUS_MAJOR_M
+      : SYSTEM.DUPLICATE_RADIUS_MINOR_M;
+  const threeHoursAgo = new Date(
+    Date.now() - SYSTEM.DUPLICATE_WINDOW_HOURS * 60 * 60 * 1000,
+  );
 
   return Report.findOne({
     status: "active",
