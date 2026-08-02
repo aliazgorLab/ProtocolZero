@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { registerUser, clearError } from '../features/auth/authSlice';
+import { ROLES } from '../constants/roles';
 
 const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
-  const [accountType, setAccountType] = useState('User');
+  const [accountType, setAccountType] = useState(ROLES.USER);
   const [phone, setPhone] = useState('');
   const [countryCode, setCountryCode] = useState('+880');
   const [password, setPassword] = useState('');
@@ -91,13 +92,13 @@ const SignUp = () => {
                 <label className="text-xs font-bold text-outline uppercase tracking-wider">Account Type</label>
                 <div className="flex gap-2">
                   <label className="flex-1 cursor-pointer">
-                    <input className="sr-only peer" name="role" type="radio" value="User" checked={accountType === 'User'} onChange={() => setAccountType('User')} />
+                    <input className="sr-only peer" name="role" type="radio" value={ROLES.USER} checked={accountType === ROLES.USER} onChange={() => setAccountType(ROLES.USER)} />
                     <div className="h-11 flex items-center justify-center rounded-lg border-2 border-outline-variant peer-checked:border-primary peer-checked:bg-primary-fixed peer-checked:text-on-primary-fixed-variant transition-all text-xs font-medium">
                       Citizen
                     </div>
                   </label>
                   <label className="flex-1 cursor-pointer">
-                    <input className="sr-only peer" name="role" type="radio" value="Volunteer" checked={accountType === 'Volunteer'} onChange={() => setAccountType('Volunteer')} />
+                    <input className="sr-only peer" name="role" type="radio" value={ROLES.VOLUNTEER} checked={accountType === ROLES.VOLUNTEER} onChange={() => setAccountType(ROLES.VOLUNTEER)} />
                     <div className="h-11 flex items-center justify-center rounded-lg border-2 border-outline-variant peer-checked:border-primary peer-checked:bg-primary-fixed peer-checked:text-on-primary-fixed-variant transition-all text-xs font-medium">
                       Volunteer
                     </div>

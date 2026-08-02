@@ -1,8 +1,8 @@
 export const ROLES = {
-  USER: 'user',
-  REPORTER: 'reporter',
-  VOLUNTEER: 'volunteer',
-  RESPONSE_TEAM: 'response_team',
-  ADMIN: 'admin',
-  SUPER_ADMIN: 'super_admin',
+  USER: 'User',
+  VOLUNTEER: 'Volunteer',
+  REPORTER: 'Reporter',
+  RESPONSE_TEAM: 'ResponseTeam',
+  ADMIN: 'Admin',
+  SUPER_ADMIN: 'SuperAdmin',
 };
