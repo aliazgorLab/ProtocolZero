@@ -3,93 +3,7 @@ const Report = require("../models/Report");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 
-const generatePostId = () => {
-  const timestampPart = Date.now().toString(36).toUpperCase();
-  const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `REP-${timestampPart}-${randomPart}`;
-};
-
-const resolveReportById = (id) => {
-  const queryConditions = [{ postId: id }];
-
-  if (mongoose.Types.ObjectId.isValid(id)) {
-    queryConditions.push({ _id: id });
-  }
-
-  return Report.findOne({ $or: queryConditions });
-};
-
-const isValidGeoPoint = (location) => {
-  return (
-    location &&
-    location.type === "Point" &&
-    Array.isArray(location.coordinates) &&
-    location.coordinates.length === 2
-  );
-};
-
-const normalizeImageList = (images) => {
-  if (!images) return [];
-  return Array.isArray(images) ? images : [images];
-};
-
-const buildMajorReportNotifications = (report, recipientIds) => {
-  return recipientIds.map((recipientId) => ({
-    recipientId,
-    referenceId: report._id,
-    referenceModel: "Report",
-    type: "report_created",
-    message: `A major report has been created: ${report.category || "General Hazard"}.`,
-  }));
-};
-
-const buildMinorReportNotifications = (report, recipientIds) => {
-  return recipientIds.map((recipientId) => ({
-    recipientId,
-    referenceId: report._id,
-    referenceModel: "Report",
-    type: "report_created",
-    message: `A minor report has been created nearby: ${report.category || "General Hazard"}.`,
-  }));
-};
-
-const getNearbyMinorReportRecipients = async (report, excludeUserId) => {
-  const searchRadiusMeters = 1000;
-  const earthRadiusMeters = 6378137;
-  const searchRadiusRadians = searchRadiusMeters / earthRadiusMeters;
-
-  const nearbyUsers = await User.find({
-    _id: { $ne: excludeUserId },
-    accountType: { $in: ["User", "Volunteer", "ResponseTeam"] },
-    $or: [
-      {
-        gps: {
-          $geoWithin: {
-            $centerSphere: [report.location.coordinates, searchRadiusRadians],
-          },
-        },
-      },
-      {
-        currentAddressGps: {
-          $geoWithin: {
-            $centerSphere: [report.location.coordinates, searchRadiusRadians],
-          },
-        },
-      },
-      {
-        homeAddressGps: {
-          $geoWithin: {
-            $centerSphere: [report.location.coordinates, searchRadiusRadians],
-          },
-        },
-      },
-    ],
-  })
-    .select("_id")
-    .lean();
-
-  return nearbyUsers.map((user) => user._id);
-};
+const reportService = require("../services/report.service");
 
 // @desc    Create a new emergency incident report
 // @route   POST /api/reports
@@ -130,7 +44,7 @@ exports.createReport = async (req, res) => {
       });
     }
 
-    if (!isValidGeoPoint(location)) {
+    if (!reportService.isValidGeoPoint(location)) {
       return res.status(400).json({
         success: false,
         message:
@@ -148,23 +62,11 @@ exports.createReport = async (req, res) => {
       });
     }
 
-    const radiusMeters = type === "major" ? 500 : 100;
-    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
-
-    const duplicateReport = await Report.findOne({
-      status: "active",
+    const duplicateReport = await reportService.findDuplicateReport(
+      type,
       category,
-      createdAt: { $gte: threeHoursAgo },
-      location: {
-        $near: {
-          $geometry: {
-            type: "Point",
-            coordinates: location.coordinates,
-          },
-          $maxDistance: radiusMeters,
-        },
-      },
-    });
+      location,
+    );
 
     if (duplicateReport) {
       return res.status(409).json({
@@ -185,27 +87,27 @@ exports.createReport = async (req, res) => {
 
     await session.withTransaction(async () => {
       newReport = new Report({
-        postId: generatePostId(),
+        postId: reportService.generatePostId(),
         issuerId: req.user._id,
         type,
         category,
         description: description || null,
         location,
         impactAreas: type === "major" ? impactAreas : [],
-        image: normalizeImageList(images),
+        image: reportService.normalizeImageList(images),
         reliability: isTrustedAuthor ? "valid" : "none",
       });
 
       await newReport.save({ session });
 
       if (type === "minor") {
-        const recipientIds = await getNearbyMinorReportRecipients(
+        const recipientIds = await reportService.getNearbyMinorReportRecipients(
           newReport,
           req.user._id,
         );
 
         if (recipientIds.length > 0) {
-          const notificationDocs = buildMinorReportNotifications(
+          const notificationDocs = reportService.buildMinorReportNotifications(
             newReport,
             recipientIds,
           );
@@ -223,7 +125,7 @@ exports.createReport = async (req, res) => {
           .lean();
 
         if (recipients.length > 0) {
-          const notificationDocs = buildMajorReportNotifications(
+          const notificationDocs = reportService.buildMajorReportNotifications(
             newReport,
             recipients.map((recipient) => recipient._id),
           );
@@ -304,7 +206,7 @@ exports.getReportById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const report = await resolveReportById(id)
+    const report = await reportService.resolveReportById(id)
       .populate("issuerId", "name accountType face")
       .populate("comments.commenterId", "name accountType face")
       .populate(
@@ -356,7 +258,7 @@ exports.addReportComment = async (req, res) => {
     const { id } = req.params;
     const { text } = req.body;
 
-    const report = await resolveReportById(id);
+    const report = await reportService.resolveReportById(id);
 
     if (!report) {
       return res.status(404).json({
@@ -398,7 +300,7 @@ exports.voteOnReport = async (req, res) => {
     const { id } = req.params;
     const { type, comment } = req.body;
 
-    const report = await resolveReportById(id);
+    const report = await reportService.resolveReportById(id);
 
     if (!report) {
       return res.status(404).json({
@@ -488,7 +390,7 @@ exports.registerVictim = async (req, res) => {
     const { gps } = req.body;
     const userId = req.user._id;
 
-    const report = await resolveReportById(id);
+    const report = await reportService.resolveReportById(id);
 
     if (!report) {
       return res.status(404).json({
@@ -553,7 +455,7 @@ exports.registerVictim = async (req, res) => {
       }
     });
 
-    const updatedReport = await resolveReportById(id)
+    const updatedReport = await reportService.resolveReportById(id)
       .populate("issuerId", "name accountType face")
       .populate("comments.commenterId", "name accountType face")
       .populate(
@@ -604,7 +506,7 @@ exports.updateReport = async (req, res) => {
       type,
     } = req.body;
 
-    const report = await resolveReportById(id).populate(
+    const report = await reportService.resolveReportById(id).populate(
       "issuerId",
       "accountType name",
     );
@@ -639,9 +541,9 @@ exports.updateReport = async (req, res) => {
 
     if (description !== undefined) report.description = description;
     if (category !== undefined) report.category = category;
-    if (images !== undefined) report.image = normalizeImageList(images);
+    if (images !== undefined) report.image = reportService.normalizeImageList(images);
     if (location !== undefined) {
-      if (!isValidGeoPoint(location)) {
+      if (!reportService.isValidGeoPoint(location)) {
         return res.status(400).json({
           success: false,
           message:
@@ -686,7 +588,7 @@ exports.deleteReport = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const report = await resolveReportById(id).populate(
+    const report = await reportService.resolveReportById(id).populate(
       "issuerId",
       "accountType name",
     );

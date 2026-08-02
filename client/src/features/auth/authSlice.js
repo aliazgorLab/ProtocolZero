@@ -61,16 +61,34 @@ export const registerUser = createAsyncThunk(
   'auth/register',
   async (userData, { rejectWithValue }) => {
     try {
-      const firebaseRes = await axios.post(
-        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`,
-        {
-          email: userData.email,
-          password: userData.password,
-          returnSecureToken: true,
-        },
-      );
-
-      const idToken = firebaseRes.data.idToken;
+      let idToken;
+      try {
+        const firebaseRes = await axios.post(
+          `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`,
+          {
+            email: userData.email,
+            password: userData.password,
+            returnSecureToken: true,
+          },
+        );
+        idToken = firebaseRes.data.idToken;
+      } catch (fbError) {
+        if (fbError.response?.data?.error?.message === 'EMAIL_EXISTS') {
+          // Fallback: If Firebase user exists but MongoDB syncing failed previously,
+          // login to get token and proceed with MongoDB syncing.
+          const loginRes = await axios.post(
+            `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`,
+            {
+              email: userData.email,
+              password: userData.password,
+              returnSecureToken: true,
+            }
+          );
+          idToken = loginRes.data.idToken;
+        } else {
+          throw fbError;
+        }
+      }
 
       const backendRes = await axios.post(
         'http://localhost:5000/api/auth/register',
