@@ -476,9 +476,24 @@ exports.sendRegistrationOtp = async (req, res) => {
     });
 
     if (existingUser) {
+      const isMatchingEmail = existingUser.email.toLowerCase() === targetEmail;
+      const matchedField = isMatchingEmail ? `email address (${targetEmail})` : `phone number (${targetPhone})`;
+
+      if (existingUser.verificationStatus === 'pending') {
+        return res.status(409).json({
+          success: false,
+          message: `An account application with this ${matchedField} is currently PENDING Admin verification. Please wait for an administrator to review your credentials.`,
+        });
+      }
+      if (existingUser.verificationStatus === 'rejected') {
+        return res.status(409).json({
+          success: false,
+          message: `A registration application with this ${matchedField} was rejected by system administrators.`,
+        });
+      }
       return res.status(409).json({
         success: false,
-        message: "Conflict: An account with this phone number or email already exists in the system.",
+        message: `An account with this ${matchedField} already exists in the system. Please proceed to the login portal.`,
       });
     }
 
