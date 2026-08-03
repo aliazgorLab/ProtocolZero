@@ -254,6 +254,21 @@ exports.loginCheck = async (req, res) => {
       return res.status(403).json({ success: false, message: "Invalid portal. Administrators only." });
     }
 
+    // Enforce verification status check (Pending or Rejected accounts CANNOT log in)
+    if (user.verificationStatus === 'pending') {
+      return res.status(403).json({
+        success: false,
+        message: "Your account application is currently under review by system administrators. You cannot log in until an admin approves your credentials."
+      });
+    }
+
+    if (user.verificationStatus === 'rejected') {
+      return res.status(403).json({
+        success: false,
+        message: "Your registration application was rejected by system administrators."
+      });
+    }
+
     // Case A: Extra security layer is turned OFF -> Immediate Login
     if (!user.twoFactorEnabled) {
       return res.status(200).json({
@@ -365,6 +380,36 @@ exports.verifyEmailOtp = async (req, res) => {
 const crypto = require("crypto");
 const JWT_SECRET = process.env.JWT_SECRET || "protocol_zero_secure_registration_secret_key";
 
+const otpLockoutMap = new Map(); // email -> { attempts: number, lockUntil: number }
+
+const getLockoutInfo = (email) => {
+  const normEmail = (email || "").toLowerCase().trim();
+  const record = otpLockoutMap.get(normEmail);
+  if (!record) return { isLocked: false, attempts: 0 };
+  if (Date.now() > record.lockUntil) {
+    otpLockoutMap.delete(normEmail);
+    return { isLocked: false, attempts: 0 };
+  }
+  const remainingMins = Math.ceil((record.lockUntil - Date.now()) / 60000);
+  return { isLocked: true, attempts: record.attempts, remainingMins };
+};
+
+const recordFailedOtpAttempt = (email) => {
+  const normEmail = (email || "").toLowerCase().trim();
+  const record = otpLockoutMap.get(normEmail) || { attempts: 0, lockUntil: 0 };
+  record.attempts += 1;
+  if (record.attempts >= 5) {
+    record.lockUntil = Date.now() + 10 * 60 * 1000; // 10 minutes lock
+  }
+  otpLockoutMap.set(normEmail, record);
+  return record;
+};
+
+const clearOtpLockout = (email) => {
+  const normEmail = (email || "").toLowerCase().trim();
+  otpLockoutMap.delete(normEmail);
+};
+
 const generateRegistrationToken = (email, phone, otp) => {
   const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
   const otpHash = crypto.createHmac("sha256", JWT_SECRET).update(`${otp}:${email}:${expiresAt}`).digest("hex");
@@ -415,6 +460,15 @@ exports.sendRegistrationOtp = async (req, res) => {
 
     const targetEmail = email.trim().toLowerCase();
     const targetPhone = phone.trim();
+
+    // Check if account is locked out from too many failed OTP attempts
+    const lockout = getLockoutInfo(targetEmail);
+    if (lockout.isLocked) {
+      return res.status(429).json({
+        success: false,
+        message: `Too many failed OTP attempts. Account registration is locked for ${lockout.remainingMins} more minute(s).`,
+      });
+    }
 
     // Check if user already exists in MongoDB
     const existingUser = await User.findOne({
@@ -485,13 +539,36 @@ exports.verifyRegistrationOtp = async (req, res) => {
       });
     }
 
-    const verifyResult = verifyRegistrationTokenHelper(tempRegistrationToken, otp);
-    if (!verifyResult.valid) {
-      return res.status(401).json({
+    const targetEmail = (registrationPayload?.email || "").trim().toLowerCase();
+
+    // 1. Check if user is locked out
+    const lockout = getLockoutInfo(targetEmail);
+    if (lockout.isLocked) {
+      return res.status(429).json({
         success: false,
-        message: verifyResult.message,
+        message: `Too many failed OTP attempts. Account registration is locked for ${lockout.remainingMins} more minute(s).`,
       });
     }
+
+    // 2. Verify OTP
+    const verifyResult = verifyRegistrationTokenHelper(tempRegistrationToken, otp);
+    if (!verifyResult.valid) {
+      const attemptRecord = recordFailedOtpAttempt(targetEmail);
+      if (attemptRecord.attempts >= 5) {
+        return res.status(429).json({
+          success: false,
+          message: "Maximum OTP verification attempts (5/5) exceeded. Registration is locked for 10 minutes.",
+        });
+      }
+      const remaining = 5 - attemptRecord.attempts;
+      return res.status(401).json({
+        success: false,
+        message: `${verifyResult.message} (${remaining} attempt${remaining === 1 ? '' : 's'} remaining)`,
+      });
+    }
+
+    // On success: clear lockout counter
+    clearOtpLockout(targetEmail);
 
     const {
       name,
@@ -512,12 +589,12 @@ exports.verifyRegistrationOtp = async (req, res) => {
       gps
     } = registrationPayload;
 
-    const targetEmail = (email || verifyResult.email || "").toLowerCase();
+    const userEmail = (email || verifyResult.email || targetEmail || "").toLowerCase();
     const targetPhone = phone || verifyResult.phone;
 
     // Check duplicate in DB before creating
     let existingUser = await User.findOne({
-      $or: [{ phone: targetPhone }, { email: targetEmail }],
+      $or: [{ phone: targetPhone }, { email: userEmail }],
     });
 
     if (existingUser) {
@@ -535,7 +612,7 @@ exports.verifyRegistrationOtp = async (req, res) => {
     const userData = {
       name,
       phone: targetPhone,
-      email: targetEmail,
+      email: userEmail,
       accountType,
       verificationStatus,
       score: 0,

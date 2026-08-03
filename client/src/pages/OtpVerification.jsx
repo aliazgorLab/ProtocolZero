@@ -158,10 +158,10 @@ const OtpVerification = () => {
             </p>
           </div>
           <div className="pt-4 border-t border-outline-variant/30 flex gap-3 justify-center">
-            <button onClick={() => navigate('/profile')} className="px-6 py-2.5 bg-primary text-white font-bold rounded-xl text-sm shadow-md hover:bg-primary/90 transition-all cursor-pointer">
-              Go to Profile
+            <button onClick={() => navigate('/login/vetted')} className="px-6 py-2.5 bg-primary text-white font-bold rounded-xl text-sm shadow-md hover:bg-primary/90 transition-all cursor-pointer">
+              Go to Official Login
             </button>
-            <button onClick={() => navigate('/home')} className="px-6 py-2.5 bg-surface-container-high text-on-surface font-bold rounded-xl text-sm hover:bg-surface-container-highest transition-all cursor-pointer">
+            <button onClick={() => navigate('/')} className="px-6 py-2.5 bg-surface-container-high text-on-surface font-bold rounded-xl text-sm hover:bg-surface-container-highest transition-all cursor-pointer">
               Return Home
             </button>
           </div>

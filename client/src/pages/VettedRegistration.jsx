@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { registerVettedUser, clearError } from '../features/auth/authSlice';
+import { registerVettedUser, sendRegistrationOtp, setRegistrationState, clearError } from '../features/auth/authSlice';
 import { useToast } from '../context/ToastContext';
 
 const VettedRegistration = () => {
