@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 
 const CreateReport = () => {
-  const currentUserRole = 'User';
+  const { user: currentUser } = useSelector((state) => state.auth);
+  const currentUserRole = currentUser?.accountType || 'User';
+  
   const [reportType, setReportType] = useState('minor');
   const [selectedCategory, setSelectedCategory] = useState('general-hazard');
   const [description, setDescription] = useState('');
@@ -14,12 +17,12 @@ const CreateReport = () => {
   const navigate = useNavigate();
 
   const categories = useMemo(() => ([
-    { id: 'general-hazard', label: 'General Hazard' },
-    { id: 'fire', label: 'Fire' },
-    { id: 'medical', label: 'Medical' },
-    { id: 'crime', label: 'Crime' },
-    { id: 'flood', label: 'Flood' },
-    { id: 'infrastructure', label: 'Infrastructure' },
+    { id: 'general-hazard', label: 'General Hazard', icon: 'warning' },
+    { id: 'fire', label: 'Fire', icon: 'local_fire_department' },
+    { id: 'medical', label: 'Medical Emergency', icon: 'medical_services' },
+    { id: 'crime', label: 'Security / Crime', icon: 'local_police' },
+    { id: 'flood', label: 'Flood / Weather', icon: 'flood' },
+    { id: 'infrastructure', label: 'Infrastructure Failure', icon: 'engineering' },
   ]), []);
 
   const majorLocked = currentUserRole === 'User' || currentUserRole === 'Volunteer';
@@ -34,7 +37,6 @@ const CreateReport = () => {
       images,
       impactAreas: reportType === 'major' ? impactAreas : [],
     };
-
     console.log('Dummy report payload', payload);
     navigate('/home');
   };
@@ -58,205 +60,281 @@ const CreateReport = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.04),_transparent_34%),linear-gradient(180deg,_#f8fafc_0%,_#ffffff_100%)] px-4 py-10 text-slate-900">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-8 max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Incident intake</p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Create Report</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            Dummy-only form preview for Protocol Zero. This screen is intentionally static and does not call the API.
-          </p>
-        </div>
+    <div className="min-h-screen bg-background pb-24 text-on-background relative overflow-x-hidden">
+      {/* Background styling elements */}
+      <div className="absolute top-0 left-0 w-full h-96 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background pointer-events-none"></div>
 
-        <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-          <section className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_18px_60px_-35px_rgba(15,23,42,0.35)] backdrop-blur">
-            <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-5">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-950">Report Details</h3>
-                <p className="mt-1 text-sm text-slate-500">Use the controls below to shape the incident broadcast.</p>
+      <div className="pt-20 pb-8 px-4 max-w-6xl mx-auto border-b border-outline-variant/30 relative z-10">
+        <div className="flex items-center gap-3 mb-2">
+          <span className="material-symbols-outlined text-alert-red text-[40px]">cell_tower</span>
+          <h2 className="text-3xl font-black uppercase tracking-tighter text-on-surface">System Intake</h2>
+        </div>
+        <p className="text-sm font-medium text-on-surface-variant tracking-wide max-w-2xl">
+          Submit verified intelligence to the Protocol Zero network. Active incidents will be broadcasted to nearby responders and citizens.
+        </p>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 py-8 relative z-10">
+        <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          
+          {/* Main Form Area */}
+          <section className="bg-surface-container rounded-2xl border border-outline-variant/30 shadow-lg overflow-hidden">
+            <div className="bg-surface-container-high p-5 flex items-center justify-between border-b border-outline-variant/30">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">edit_document</span>
+                <h3 className="text-lg font-bold text-on-surface uppercase tracking-wider">Report Parameters</h3>
               </div>
-              <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-                Role: {currentUserRole}
+              <div className="bg-primary/10 text-primary border border-primary/20 px-3 py-1 text-xs font-bold uppercase tracking-widest rounded-full">
+                Clearance: {currentUserRole}
               </div>
             </div>
 
-            <div className="mt-6 space-y-6">
+            <div className="p-6 space-y-8">
+              
+              {/* Report Type */}
               <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Report Type</label>
-                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <label className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-4 transition ${reportType === 'minor' ? 'border-slate-900 bg-slate-950 text-white' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                    <input
-                      type="radio"
-                      name="reportType"
-                      value="minor"
-                      checked={reportType === 'minor'}
-                      onChange={() => setReportType('minor')}
-                      className="h-4 w-4 accent-slate-950"
-                    />
+                <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3 block">Classification Level</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  
+                  <label className={`relative flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all ${reportType === 'minor' ? 'border-primary bg-primary/5 shadow-[0_0_15px_rgba(var(--primary),0.1)]' : 'border-outline-variant/50 bg-surface-container-lowest hover:border-outline-variant'}`}>
+                    <div className="pt-1">
+                      <input
+                        type="radio"
+                        name="reportType"
+                        value="minor"
+                        checked={reportType === 'minor'}
+                        onChange={() => setReportType('minor')}
+                        className="h-4 w-4 accent-primary"
+                      />
+                    </div>
                     <div>
-                      <div className="font-medium">Minor</div>
-                      <div className={`text-sm ${reportType === 'minor' ? 'text-slate-200' : 'text-slate-500'}`}>Single-location incident update</div>
+                      <div className={`font-bold uppercase tracking-wider ${reportType === 'minor' ? 'text-primary' : 'text-on-surface'}`}>Standard Broadcast</div>
+                      <div className="text-xs text-on-surface-variant font-medium mt-1">Single-location intelligence update for general awareness.</div>
                     </div>
                   </label>
 
-                  <label className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-4 transition ${reportType === 'major' ? 'border-slate-900 bg-slate-950 text-white' : 'border-slate-200 bg-white hover:border-slate-300'} ${majorLocked ? 'opacity-60' : ''}`}>
-                    <input
-                      type="radio"
-                      name="reportType"
-                      value="major"
-                      checked={reportType === 'major'}
-                      disabled={majorLocked}
-                      onChange={() => setReportType('major')}
-                      className="h-4 w-4 accent-slate-950 disabled:cursor-not-allowed"
-                    />
-                    <div>
-                      <div className="font-medium">Major</div>
-                      <div className={`text-sm ${reportType === 'major' ? 'text-slate-200' : 'text-slate-500'}`}>Broadcast with impact area detail</div>
+                  <label className={`relative flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all ${majorLocked ? 'opacity-50 grayscale cursor-not-allowed' : ''} ${reportType === 'major' ? 'border-alert-red bg-alert-red/5 shadow-[0_0_15px_rgba(255,0,0,0.1)]' : 'border-outline-variant/50 bg-surface-container-lowest hover:border-outline-variant'}`}>
+                    <div className="pt-1">
+                      <input
+                        type="radio"
+                        name="reportType"
+                        value="major"
+                        checked={reportType === 'major'}
+                        disabled={majorLocked}
+                        onChange={() => setReportType('major')}
+                        className="h-4 w-4 accent-alert-red disabled:cursor-not-allowed"
+                      />
                     </div>
+                    <div>
+                      <div className={`font-bold uppercase tracking-wider ${reportType === 'major' ? 'text-alert-red' : 'text-on-surface'}`}>Major Incident</div>
+                      <div className="text-xs text-on-surface-variant font-medium mt-1">Wide-area emergency alert. Requires established impact zones.</div>
+                    </div>
+                    {majorLocked && (
+                      <div className="absolute -top-3 -right-2 bg-surface-container-highest text-on-surface-variant text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm border border-outline-variant/30">
+                        Restricted
+                      </div>
+                    )}
                   </label>
+
                 </div>
                 {majorLocked && (
-                  <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    Only verified Reporters can issue Major broadcasts.
+                  <p className="mt-3 flex items-center gap-2 text-xs font-bold text-alert-red bg-alert-red/10 px-4 py-2 rounded-lg">
+                    <span className="material-symbols-outlined text-[16px]">lock</span>
+                    Major incident broadcasts require Verified Reporter or Admin clearance.
                   </p>
                 )}
               </div>
 
+              {/* Category */}
               <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Category</label>
-                <select
-                  value={selectedCategory}
-                  onChange={(event) => setSelectedCategory(event.target.value)}
-                  className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
-                >
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Description</label>
-                <textarea
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  placeholder="Describe what happened, what you observed, and any immediate risks..."
-                  rows="6"
-                  className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Location</label>
-                <div className="mt-3 rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">Map placeholder</p>
-                      <p className="mt-1 text-sm text-slate-500">Use the location picker later. This box represents the map selection area.</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-                    >
-                      Use My Location
-                    </button>
-                  </div>
-                  <input
-                    value={locationLabel}
-                    onChange={(event) => setLocationLabel(event.target.value)}
-                    placeholder="Lat / Lng or selected address"
-                    className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
-                  />
+                <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3 block">Incident Category</label>
+                <div className="relative">
+                  <select
+                    value={selectedCategory}
+                    onChange={(event) => setSelectedCategory(event.target.value)}
+                    className="w-full appearance-none rounded-xl border border-outline-variant/50 bg-surface-container-lowest px-4 py-4 text-sm font-medium text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+                  >
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">expand_more</span>
                 </div>
               </div>
 
+              {/* Description */}
               <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Images</label>
-                <label className="mt-3 flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition hover:border-slate-400 hover:bg-slate-100/60">
-                  <span className="text-sm font-medium text-slate-900">Upload supporting files</span>
-                  <span className="mt-1 text-sm text-slate-500">PNG, JPG, MP4, or PDF</span>
+                <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3 block">Field Description</label>
+                <textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="Provide detailed intelligence on the situation. Include immediate risks, responder status, and required resources..."
+                  rows="5"
+                  className="w-full rounded-xl border border-outline-variant/50 bg-surface-container-lowest px-4 py-4 text-sm font-medium text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/50 focus:border-primary focus:ring-1 focus:ring-primary resize-none"
+                />
+              </div>
+
+              {/* Location */}
+              <div>
+                <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3 block">Geospatial Coordinates</label>
+                <div className="rounded-xl border border-outline-variant/50 bg-surface-container-lowest overflow-hidden">
+                  <div className="bg-surface-container-low p-4 flex items-center justify-between border-b border-outline-variant/30">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary">radar</span>
+                      <span className="text-sm font-bold text-on-surface uppercase tracking-wider">Target Location</span>
+                    </div>
+                    <button type="button" className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full transition-colors">
+                      <span className="material-symbols-outlined text-[16px]">my_location</span>
+                      Sync GPS
+                    </button>
+                  </div>
+                  <div className="p-4">
+                    <div className="h-32 bg-surface-container rounded-lg border border-outline-variant/30 mb-4 flex items-center justify-center relative overflow-hidden">
+                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                      <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest z-10">[ Tactical Map UI Hidden ]</span>
+                    </div>
+                    <input
+                      value={locationLabel}
+                      onChange={(event) => setLocationLabel(event.target.value)}
+                      placeholder="Lat / Lng or selected address"
+                      className="w-full rounded-lg border border-outline-variant/50 bg-surface-container px-4 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-primary"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Images */}
+              <div>
+                <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3 block">Visual Intelligence (Attachments)</label>
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-outline-variant bg-surface-container-lowest px-6 py-10 text-center transition-colors hover:border-primary hover:bg-primary/5">
+                  <span className="material-symbols-outlined text-3xl text-on-surface-variant mb-2">cloud_upload</span>
+                  <span className="text-sm font-bold text-on-surface">Select media files to upload</span>
+                  <span className="mt-1 text-xs font-medium text-on-surface-variant uppercase tracking-wider">PNG, JPG, MP4 (Max 50MB)</span>
                   <input type="file" multiple onChange={handleImageUpload} className="hidden" />
                 </label>
 
                 {images.length > 0 && (
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {images.map((image) => (
-                      <div key={image.name} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
-                        <p className="font-medium text-slate-900">{image.name}</p>
-                        <p className="mt-1 text-slate-500">{image.size}</p>
+                      <div key={image.name} className="flex items-center gap-3 rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-4 py-3 shadow-sm">
+                        <span className="material-symbols-outlined text-primary">image</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-on-surface text-sm truncate">{image.name}</p>
+                          <p className="text-xs text-on-surface-variant font-medium">{image.size}</p>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
+              {/* Impact Areas (Major Only) */}
               {reportType === 'major' && (
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-950">Impact Areas</h4>
-                      <p className="mt-1 text-sm text-slate-500">Coordinate and radius list for major broadcasts.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={addImpactArea}
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
-                    >
-                      + Add Area
-                    </button>
-                  </div>
-
-                  <div className="mt-4 space-y-3">
-                    {impactAreas.map((impactArea, index) => (
-                      <div key={`${index}-${impactArea.coordinate}`} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-[1.3fr_0.7fr]">
-                        <input
-                          value={impactArea.coordinate}
-                          onChange={(event) => updateImpactArea(index, 'coordinate', event.target.value)}
-                          placeholder="Longitude, latitude"
-                          className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
-                        />
-                        <input
-                          value={impactArea.radius}
-                          onChange={(event) => updateImpactArea(index, 'radius', event.target.value)}
-                          placeholder="Radius (meters)"
-                          className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
-                        />
+                <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                  <div className="rounded-xl border border-alert-red/30 bg-alert-red/5 overflow-hidden">
+                    <div className="bg-alert-red/10 p-4 flex items-center justify-between border-b border-alert-red/20">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-alert-red">crisis_alert</span>
+                        <h4 className="text-sm font-bold text-alert-red uppercase tracking-wider">Impact Zones</h4>
                       </div>
-                    ))}
+                      <button
+                        type="button"
+                        onClick={addImpactArea}
+                        className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-white text-alert-red px-3 py-1.5 rounded-full shadow-sm hover:bg-alert-red hover:text-white transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">add</span>
+                        Add Zone
+                      </button>
+                    </div>
+
+                    <div className="p-4 space-y-3">
+                      {impactAreas.map((impactArea, index) => (
+                        <div key={`${index}-${impactArea.coordinate}`} className="grid gap-3 md:grid-cols-[1.3fr_0.7fr]">
+                          <input
+                            value={impactArea.coordinate}
+                            onChange={(event) => updateImpactArea(index, 'coordinate', event.target.value)}
+                            placeholder="Longitude, latitude"
+                            className="w-full rounded-lg border border-alert-red/30 bg-surface-container-lowest px-4 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-alert-red focus:ring-1 focus:ring-alert-red placeholder:text-alert-red/40"
+                          />
+                          <input
+                            value={impactArea.radius}
+                            onChange={(event) => updateImpactArea(index, 'radius', event.target.value)}
+                            placeholder="Radius (meters)"
+                            className="w-full rounded-lg border border-alert-red/30 bg-surface-container-lowest px-4 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-alert-red focus:ring-1 focus:ring-alert-red placeholder:text-alert-red/40"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
             </div>
           </section>
 
+          {/* Right Column: Preview & Submit */}
           <aside className="space-y-6">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_60px_-40px_rgba(15,23,42,0.35)]">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Preview</h3>
-              <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                <div className="flex items-center justify-between">
-                  <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-medium text-white">{reportType.toUpperCase()}</span>
-                  <span className="text-xs text-slate-500">Draft</span>
+            
+            <div className="bg-surface-container rounded-2xl border border-outline-variant/30 shadow-lg overflow-hidden sticky top-24">
+              <div className="bg-surface-container-high p-4 border-b border-outline-variant/30 flex items-center justify-between">
+                <h3 className="text-sm font-bold uppercase tracking-widest text-on-surface-variant flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">preview</span>
+                  Broadcast Preview
+                </h3>
+              </div>
+              
+              <div className="p-5">
+                {/* Simulated Feed Card */}
+                <div className={`border-l-4 rounded-xl shadow-sm overflow-hidden flex flex-col bg-surface-container-lowest ${reportType === 'major' ? 'border-alert-red' : 'border-[#FFB000]'}`}>
+                  <div className="p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-primary text-[16px]">person</span>
+                        </div>
+                        <div>
+                          <p className="font-bold text-on-surface text-sm">System Operator</p>
+                          <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Just now</p>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${reportType === 'major' ? 'bg-error-container text-on-error-container' : 'bg-tertiary-fixed text-on-tertiary-fixed-variant'}`}>
+                        {reportType === 'major' ? 'HIGH URGENCY' : 'MEDIUM URGENCY'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`material-symbols-outlined ${reportType === 'major' ? 'text-alert-red' : 'text-[#FFB000]'}`}>
+                        {categories.find((c) => c.id === selectedCategory)?.icon || 'warning'}
+                      </span>
+                      <h4 className="font-bold text-on-surface text-base">
+                        {categories.find((c) => c.id === selectedCategory)?.label || 'Incident'}
+                      </h4>
+                    </div>
+                    <p className="text-sm text-on-surface-variant line-clamp-3">
+                      {description || 'Incident description preview will appear here as you type...'}
+                    </p>
+                  </div>
+                  <div className="bg-surface-container px-4 py-2 text-xs font-bold uppercase tracking-wider text-on-surface-variant border-t border-outline-variant/30 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[16px]">location_on</span>
+                    <span className="truncate">{locationLabel || 'Location not set'}</span>
+                  </div>
                 </div>
-                <p className="mt-4 text-base font-semibold text-slate-950">{categories.find((category) => category.id === selectedCategory)?.label}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{description || 'Incident description preview appears here.'}</p>
-                <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-500">
-                  {locationLabel || 'Selected location will appear here.'}
-                </div>
+
+                <button
+                  type="submit"
+                  className={`mt-6 w-full rounded-xl px-5 py-4 text-sm font-black uppercase tracking-widest text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 ${reportType === 'major' ? 'bg-alert-red hover:bg-red-700 shadow-alert-red/20' : 'bg-primary hover:bg-primary/90 shadow-primary/20'}`}
+                >
+                  <span className="material-symbols-outlined text-[20px]">send_and_archive</span>
+                  Transmit Data
+                </button>
+
+                <p className="mt-4 text-[10px] font-medium uppercase tracking-widest text-on-surface-variant text-center leading-relaxed">
+                  UI PREVIEW ONLY. Transmission simulates a database transaction and redirects to the feed.
+                </p>
               </div>
             </div>
 
-            <button
-              type="submit"
-              className="w-full rounded-2xl bg-slate-950 px-5 py-4 text-sm font-semibold text-white shadow-lg shadow-slate-950/20 transition hover:bg-slate-800"
-            >
-              Broadcast Report
-            </button>
-
-            <p className="text-xs leading-5 text-slate-500">
-              This page is intentionally static and uses dummy state only. The submit action logs the current form payload to the console and returns to the home view.
-            </p>
           </aside>
         </form>
       </div>

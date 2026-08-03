@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import CreateReportBox from '../components/CreateReportBox';
 
 const Home = () => {
   // Simple interaction states
@@ -38,9 +39,13 @@ const Home = () => {
       </section>
 
       {/* Incident Feed */}
-      <div className="px-4 py-6 flex flex-col gap-6 relative z-40 bg-background/50 backdrop-blur-sm -mt-2">
+      <div className="px-4 py-6 flex flex-col gap-6 relative z-40 bg-background/50 backdrop-blur-sm -mt-2 max-w-4xl mx-auto">
+        
+        {/* Create Report Box */}
+        <CreateReportBox />
+
         {/* Feed Filter/Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mt-2">
           <h2 className="text-xl font-bold text-on-surface">Live Feed</h2>
           <button className="flex items-center gap-1 text-primary text-xs font-bold uppercase tracking-wider bg-primary-fixed px-3 py-1 rounded-full hover:bg-primary/20 transition-colors">
             <span className="material-symbols-outlined text-[16px]">tune</span>

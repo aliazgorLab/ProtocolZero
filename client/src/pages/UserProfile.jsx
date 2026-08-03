@@ -3,22 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout, updateUser } from '../features/auth/authSlice';
 import axiosInstance from '../api/axiosInstance';
+import CreateReportBox from '../components/CreateReportBox';
 
 const UserProfile = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [dashOffset, setDashOffset] = useState(283); // 2 * PI * 45
   const [toggling2FA, setToggling2FA] = useState(false);
+  const [gpsActive, setGpsActive] = useState(false);
 
   const { user: currentUser } = useSelector((state) => state.auth);
-
-  useEffect(() => {
-    // Animate the reliability dial on mount
-    const timer = setTimeout(() => {
-      setDashOffset(5.66); // 98% value
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
 
   const handleToggle2FA = async () => {
     if (toggling2FA) return;
@@ -36,206 +29,276 @@ const UserProfile = () => {
     }
   };
 
+  const handleToggleGPS = () => {
+    setGpsActive(!gpsActive);
+    // Note: No backend integration, UI only
+  };
+
   // Merge database user attributes with mock UI metrics
   const displayUser = {
     name: currentUser?.name || 'Guardian-1',
     role: currentUser?.accountType || 'Response Team',
     status: currentUser?.verificationStatus === 'verified' ? 'Verified Citizen' : 'Pending Verification',
     joined: currentUser?.createdAt ? new Date(currentUser.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short' }) : 'Oct 2023',
-    reliability: currentUser?.score !== undefined ? currentUser.score : 98,
+    clearance: currentUser?.score !== undefined ? Math.floor(currentUser.score / 10) : 9,
     reports: 124,
     upvotes: '2.1k',
     twoFactorEnabled: currentUser?.twoFactorEnabled || false
   };
 
   return (
-    <div className="pt-20 px-4 max-w-4xl mx-auto space-y-6 pb-24">
-      
-      {/* Profile Header Section */}
-      <section className="bg-surface-container-lowest p-6 rounded-xl shadow-sm flex flex-col md:flex-row items-center gap-6">
-        <div className="relative">
-          {/* Reliability Score Dial */}
-          <svg className="w-32 h-32 -rotate-90 origin-center" viewBox="0 0 100 100">
-            <circle 
-              className="text-surface-container-high" 
-              cx="50" cy="50" fill="none" r="45" stroke="currentColor" strokeWidth="8" 
-            />
-            <circle 
-              className="text-primary-container transition-[stroke-dashoffset] duration-[1500ms] ease-[cubic-bezier(0.4,0,0.2,1)]" 
-              cx="50" cy="50" fill="none" r="45" stroke="currentColor" strokeWidth="8"
-              strokeDasharray="283"
-              strokeDashoffset={dashOffset}
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-black text-primary">{displayUser.reliability}%</span>
-            <span className="text-[8px] font-bold uppercase tracking-widest text-on-surface-variant">Reliability</span>
-          </div>
-        </div>
+    <div className="bg-surface-container-lowest min-h-screen pb-24">
+      {/* Cover Photo Area */}
+      <div className="h-48 md:h-64 w-full bg-surface-container-high relative overflow-hidden">
+        {/* Placeholder Cover Image / Pattern */}
+        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary via-surface to-background"></div>
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
         
-        <div className="flex-1 text-center md:text-left space-y-2">
-          <div className="flex flex-col md:flex-row md:items-center gap-2">
-            <h2 className="text-xl font-bold">{displayUser.name}</h2>
-            <span className="inline-flex items-center px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed text-xs font-bold uppercase tracking-wider self-center md:self-auto">
-              {displayUser.status}
-            </span>
-          </div>
-          <p className="text-sm text-on-surface-variant">{displayUser.role} • Active since {displayUser.joined}</p>
+        {/* Edit Cover Button (Visual only) */}
+        <button className="absolute bottom-4 right-4 bg-black/40 hover:bg-black/60 text-white backdrop-blur-md rounded-lg px-3 py-1.5 flex items-center gap-2 text-xs font-bold transition-colors">
+          <span className="material-symbols-outlined text-[16px]">photo_camera</span>
+          <span className="hidden sm:inline">Edit Cover</span>
+        </button>
+      </div>
+
+      {/* Profile Header Area */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 relative pb-6 border-b border-outline-variant/30">
+        
+        {/* Profile Picture & Main Info Row */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-16 sm:-mt-20 mb-4 relative z-10">
           
-          <div className="flex flex-wrap justify-center md:justify-start gap-2 mt-4">
-            <div className="px-3 py-2 bg-surface-container-low rounded-lg border border-outline-variant flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-sm fill-icon">verified</span>
-              <span className="text-xs font-medium">{displayUser.reports} Reports</span>
+          <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
+            {/* Avatar */}
+            <div className="relative group w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-surface-container-lowest bg-surface-container-low overflow-hidden shadow-lg shrink-0">
+              <div className="w-full h-full bg-primary-container flex items-center justify-center">
+                <span className="material-symbols-outlined text-[64px] text-primary">person</span>
+              </div>
+              <button className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white cursor-pointer">
+                <span className="material-symbols-outlined text-2xl">photo_camera</span>
+              </button>
             </div>
-            <div className="px-3 py-2 bg-surface-container-low rounded-lg border border-outline-variant flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-sm fill-icon">thumb_up</span>
-              <span className="text-xs font-medium">{displayUser.upvotes} Upvotes</span>
+
+            {/* Name & Title */}
+            <div className="pb-2">
+              <h1 className="text-3xl font-black text-on-surface flex items-center gap-2">
+                {displayUser.name}
+                {displayUser.status === 'Verified Citizen' && (
+                  <span className="material-symbols-outlined text-primary text-2xl" title="Verified">verified</span>
+                )}
+              </h1>
+              <p className="text-sm font-bold text-on-surface-variant uppercase tracking-wider">
+                {displayUser.role} • Lvl {displayUser.clearance} Clearance
+              </p>
             </div>
           </div>
+          
+          {/* Action Buttons (Right side on desktop, stacked on mobile) */}
+          <div className="flex flex-col sm:flex-row gap-2 pb-2">
+            <button 
+              onClick={handleToggleGPS}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold shadow-sm transition-colors active:scale-95 ${
+                gpsActive 
+                  ? 'bg-alert-red text-white hover:bg-red-600' 
+                  : 'bg-primary text-on-primary hover:bg-primary/90'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[20px]">{gpsActive ? 'location_off' : 'my_location'}</span>
+              {gpsActive ? 'Stop GPS Broadcast' : 'Activate Live GPS'}
+            </button>
+            <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-bold bg-surface-container-high text-on-surface hover:bg-surface-container-highest transition-colors active:scale-95">
+              <span className="material-symbols-outlined text-[20px]">edit</span>
+              Edit Profile
+            </button>
+          </div>
         </div>
-      </section>
-
-      {/* Bento Grid Content */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
         
-        {/* Reliability Growth Chart */}
-        <div className="md:col-span-8 bg-surface-container-lowest p-6 rounded-xl shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-bold">Reliability Growth</h3>
-            <span className="text-xs font-medium text-primary">+4.2% this month</span>
-          </div>
-          <div className="h-48 w-full flex items-end gap-2 px-1">
-            <div className="flex-1 bg-primary-container/20 rounded-t-sm h-[40%] relative group">
-              <div className="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] bg-inverse-surface text-inverse-on-surface px-1 rounded">82%</div>
-            </div>
-            <div className="flex-1 bg-primary-container/30 rounded-t-sm h-[55%] relative group"></div>
-            <div className="flex-1 bg-primary-container/40 rounded-t-sm h-[65%] relative group"></div>
-            <div className="flex-1 bg-primary-container/60 rounded-t-sm h-[75%] relative group"></div>
-            <div className="flex-1 bg-primary-container/80 rounded-t-sm h-[88%] relative group"></div>
-            <div className="flex-1 bg-primary-container rounded-t-sm h-[98%] relative group"></div>
-          </div>
-          <div className="flex justify-between mt-4 text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-            <span>JAN</span><span>FEB</span><span>MAR</span><span>APR</span><span>MAY</span><span>JUN</span>
+        {/* Bio / Stats */}
+        <div className="mt-2 text-sm text-on-surface">
+          <p className="mb-4 text-on-surface-variant max-w-2xl">
+            Official Responder stationed in Metro City. Dedicated to maintaining order and coordinating emergency response efforts during active incidents.
+          </p>
+          <div className="flex flex-wrap gap-4 text-xs font-medium text-on-surface-variant uppercase tracking-wider">
+            <span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">calendar_month</span> Joined {displayUser.joined}</span>
+            <span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">description</span> {displayUser.reports} Reports</span>
+            <span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">thumb_up</span> {displayUser.upvotes} Upvotes</span>
           </div>
         </div>
+      </div>
 
-        {/* Apply to Volunteer CTA */}
-        <div className="md:col-span-4 bg-tertiary-container text-on-tertiary-container p-6 rounded-xl shadow-lg flex flex-col justify-between relative overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer">
-          <div className="relative z-10">
-            <h3 className="text-xl font-bold text-white mb-2">Elevate Status</h3>
-            <p className="text-sm text-tertiary-fixed opacity-90">Join the Volunteer Response Network. Help your community in real-time.</p>
-          </div>
-          <div className="mt-6 z-10">
-            <button className="bg-white text-tertiary-container text-xs font-bold uppercase tracking-wider px-4 py-3 rounded-full w-full shadow-md">Apply to Volunteer</button>
-          </div>
-          <span className="material-symbols-outlined absolute -bottom-4 -right-4 text-8xl opacity-10">shield</span>
-        </div>
-
-        {/* Incident History */}
-        <div className="md:col-span-7 bg-surface-container-lowest p-6 rounded-xl shadow-sm">
-          <h3 className="text-xl font-bold mb-6">Recent Incident Reports</h3>
-          <div className="space-y-4">
-            {/* Report Item 1 */}
-            <div className="flex gap-4 p-3 hover:bg-surface-container transition-colors rounded-lg group cursor-pointer border-l-4 border-error">
-              <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0">
-                <img 
-                  className="w-full h-full object-cover" 
-                  alt="Incident preview" 
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuALNN09mlwRlWqwbsUTU7Is4m0GQJoMDHRjppsMo7Ng3t9mHfFfQGEhD3eMlaqreICB28ktQbeDxw1xRt3XwsKmE5rfVMPXBS9JEeXgVwhQOcjq572LsmbTiWNDC-NDlds3zgxGJe7N-MkCxsBlgN-YzQ-VDcA5516StFJoEVdnq0PK--IbFLaeNvzms7sv4Lza5R_GAlhVWqI0uxjriIx4norAx4o1vm5uOcsAUzIsE_bl28wc1GiK"
-                />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-start">
-                  <h4 className="text-base font-bold truncate">Structural Alert: Main St</h4>
-                  <span className="text-xs font-medium text-error">Critical</span>
-                </div>
-                <p className="text-sm text-on-surface-variant truncate">Reported structural instability after tremor...</p>
-                <div className="flex items-center gap-4 mt-1 text-xs font-medium text-outline">
-                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">schedule</span> 2h ago</span>
-                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">thumb_up</span> 42</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Report Item 2 */}
-            <div className="flex gap-4 p-3 hover:bg-surface-container transition-colors rounded-lg group cursor-pointer border-l-4 border-primary">
-              <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0">
-                <img 
-                  className="w-full h-full object-cover" 
-                  alt="Incident preview" 
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-u3-Mswpdwuo35NZNo6YmzsAWTnxLmRI0KXlMvO-JVixDTEigDk_vlOf_gdurYGcwIn1hqNzqQUDQiro2rDzWUr4TR2m1CAG8JUoZAKxF8spbP8I0ot6PHrnV2gTwoukDU3jE7DpzToji_F1epR_6C4Lbj5I5jfr0HzyATLjcFWn63FQu_LZ95VCrh2YTsTLlfTjWMOpr6CCxh8QvrD5R783eKJWK6rRiWMD3PdbyiJfYWBOZDV2H"
-                />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-start">
-                  <h4 className="text-base font-bold truncate">Traffic Reroute: Zone 4</h4>
-                  <span className="text-xs font-medium text-primary">Informational</span>
-                </div>
-                <p className="text-sm text-on-surface-variant truncate">Minor congestion due to local event...</p>
-                <div className="flex items-center gap-4 mt-1 text-xs font-medium text-outline">
-                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">schedule</span> 1d ago</span>
-                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">thumb_up</span> 156</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <button className="w-full mt-6 text-xs font-bold uppercase tracking-wider text-primary py-2 border border-primary/20 rounded-lg hover:bg-primary-fixed transition-colors">View All History</button>
-        </div>
-
-        {/* Settings Links */}
-        <div className="md:col-span-5 space-y-4">
-          <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+      {/* Main Content Layout (Timeline style) */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 flex flex-col md:flex-row gap-6">
+        
+        {/* Left Column (About / Settings) */}
+        <div className="w-full md:w-[350px] shrink-0 space-y-4">
+          
+          <div className="bg-surface-container rounded-xl shadow-sm overflow-hidden border border-outline-variant/30">
             <div className="p-4 border-b border-outline-variant/30">
-              <h3 className="text-xl font-bold">Account Settings</h3>
+              <h2 className="text-lg font-bold text-on-surface">About</h2>
+            </div>
+            <div className="p-4 space-y-4 text-sm text-on-surface">
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-outline shrink-0">work</span>
+                <span>Works at <strong className="font-bold">Protocol Zero Response Unit</strong></span>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-outline shrink-0">location_on</span>
+                <span>Lives in <strong className="font-bold">Metro City, Sector 4</strong></span>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-outline shrink-0">verified_user</span>
+                <span>Clearance Level <strong className="font-bold text-primary">Alpha (Lvl {displayUser.clearance})</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-surface-container rounded-xl shadow-sm overflow-hidden border border-outline-variant/30">
+            <div className="p-4 border-b border-outline-variant/30">
+              <h2 className="text-lg font-bold text-on-surface">Account Settings</h2>
             </div>
             <div className="divide-y divide-outline-variant/20 flex flex-col">
-              <Link to="#" className="flex items-center justify-between p-4 hover:bg-surface-container transition-colors">
+              <Link to="#" className="flex items-center justify-between p-4 hover:bg-surface-container-high transition-colors">
                 <div className="flex items-center gap-3">
                   <span className="material-symbols-outlined text-on-surface-variant">person_outline</span>
-                  <span className="text-base">Identity Verification</span>
+                  <span className="text-sm font-medium">Identity Verification</span>
                 </div>
                 <span className="material-symbols-outlined text-outline">chevron_right</span>
               </Link>
-              <Link to="#" className="flex items-center justify-between p-4 hover:bg-surface-container transition-colors">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-on-surface-variant">notifications_active</span>
-                  <span className="text-base">Alert Preferences</span>
-                </div>
-                <span className="material-symbols-outlined text-outline">chevron_right</span>
-              </Link>
-              <div className="flex items-center justify-between p-4 hover:bg-surface-container transition-colors">
+              <div className="flex items-center justify-between p-4 hover:bg-surface-container-high transition-colors">
                 <div className="flex items-center gap-3">
                   <span className="material-symbols-outlined text-on-surface-variant">security</span>
                   <div className="flex flex-col">
-                    <span className="text-base">Two-Factor OTP</span>
-                    <span className="text-xs text-on-surface-variant">Enable OTP for elevated security</span>
+                    <span className="text-sm font-medium">Two-Factor OTP</span>
                   </div>
                 </div>
                 <button 
                   onClick={handleToggle2FA}
                   disabled={toggling2FA}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors min-w-[80px] text-center ${
+                  className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors min-w-[70px] text-center ${
                     displayUser.twoFactorEnabled 
                       ? 'bg-primary text-white hover:bg-primary/95' 
-                      : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'
+                      : 'bg-surface-container-highest text-on-surface hover:bg-outline-variant'
                   }`}
                 >
                   {toggling2FA ? '...' : displayUser.twoFactorEnabled ? 'Enabled' : 'Disabled'}
                 </button>
               </div>
-              <button onClick={() => { dispatch(logout()); navigate('/login'); }} className="w-full flex items-center justify-between p-4 hover:bg-surface-container transition-colors text-error">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined">logout</span>
-                  <span className="text-base">Sign Out</span>
-                </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Right Column (Activity Log / Posts) */}
+        <div className="flex-1 space-y-4">
+          
+          <CreateReportBox />
+          
+          <div className="bg-surface-container rounded-xl shadow-sm p-4 border border-outline-variant/30 mb-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-on-surface">Recent Activity</h2>
+            </div>
+            
+            {/* Filters */}
+            <div className="flex gap-2 text-xs font-bold uppercase tracking-wider">
+              <button className="px-4 py-1.5 rounded-full bg-primary/10 text-primary">All Activity</button>
+              <button className="px-4 py-1.5 rounded-full bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-low transition-colors">Reports</button>
+              <button className="px-4 py-1.5 rounded-full bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-low transition-colors">Verifications</button>
+            </div>
+          </div>
+
+          {/* Activity Log Item 1 */}
+          <div className="bg-surface-container rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
+            <div className="p-4 flex items-start gap-3 border-b border-outline-variant/20">
+              <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-primary text-sm">person</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm">
+                  <span className="font-bold text-on-surface">{displayUser.name}</span> filed a new report <span className="font-medium">INC-4029-A</span>
+                </p>
+                <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
+                  14:30 HRS • <span className="material-symbols-outlined text-[12px]">public</span>
+                </p>
+              </div>
+              <button className="p-1 rounded-full hover:bg-surface-container-highest text-on-surface-variant">
+                <span className="material-symbols-outlined">more_horiz</span>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="flex justify-between items-start mb-2">
+                <h4 className="text-base font-bold text-on-surface">Structural Integrity Compromised</h4>
+                <span className="text-[10px] font-bold text-error bg-error-container px-2 py-0.5 rounded-sm uppercase tracking-widest">Critical</span>
+              </div>
+              <p className="text-sm text-on-surface-variant mb-4">
+                Sector 4, Main St. Initial assessments report severe structural damage post-seismic event. Area cordoned off. Backup requested for crowd control.
+              </p>
+              <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-lg h-32 flex items-center justify-center text-outline text-xs uppercase tracking-widest font-bold">
+                [ Attachments Classified ]
+              </div>
+            </div>
+            <div className="px-4 py-3 bg-surface-container-low flex justify-between items-center text-on-surface-variant text-sm font-medium border-t border-outline-variant/20">
+              <div className="flex items-center gap-6">
+                <button className="flex items-center gap-1.5 hover:text-primary transition-colors">
+                  <span className="material-symbols-outlined text-[20px]">thumb_up</span> 42
+                </button>
+                <button className="flex items-center gap-1.5 hover:text-primary transition-colors">
+                  <span className="material-symbols-outlined text-[20px]">chat_bubble</span> 3
+                </button>
+              </div>
+              <button className="flex items-center gap-1.5 hover:text-primary transition-colors">
+                <span className="material-symbols-outlined text-[20px]">share</span> Share
               </button>
             </div>
           </div>
-          <div className="bg-surface-container p-6 rounded-xl">
-            <p className="text-xs font-medium text-on-surface-variant text-center">Version 2.4.1 (Stable)<br/>© 2024 Protocol Zero Collective</p>
-          </div>
-        </div>
 
+          {/* Activity Log Item 2 */}
+          <div className="bg-surface-container rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
+             <div className="p-4 flex items-start gap-3 border-b border-outline-variant/20">
+              <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-primary text-sm">person</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm">
+                  <span className="font-bold text-on-surface">{displayUser.name}</span> verified a route <span className="font-medium">LOG-2910-B</span>
+                </p>
+                <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
+                  09:15 HRS • <span className="material-symbols-outlined text-[12px]">public</span>
+                </p>
+              </div>
+              <button className="p-1 rounded-full hover:bg-surface-container-highest text-on-surface-variant">
+                <span className="material-symbols-outlined">more_horiz</span>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="flex justify-between items-start mb-2">
+                <h4 className="text-base font-bold text-on-surface">Evacuation Route Established</h4>
+                <span className="text-[10px] font-bold text-primary bg-primary-container px-2 py-0.5 rounded-sm uppercase tracking-widest">Informational</span>
+              </div>
+              <p className="text-sm text-on-surface-variant">
+                Zone 4 to Safe Haven Delta route cleared. Traffic diversion protocols active. Confirmed passable for heavy response vehicles.
+              </p>
+            </div>
+            <div className="px-4 py-3 bg-surface-container-low flex justify-between items-center text-on-surface-variant text-sm font-medium border-t border-outline-variant/20">
+              <div className="flex items-center gap-6">
+                <button className="flex items-center gap-1.5 hover:text-primary transition-colors">
+                  <span className="material-symbols-outlined text-[20px]">thumb_up</span> 156
+                </button>
+                <button className="flex items-center gap-1.5 hover:text-primary transition-colors">
+                  <span className="material-symbols-outlined text-[20px]">chat_bubble</span> 12
+                </button>
+              </div>
+              <button className="flex items-center gap-1.5 hover:text-primary transition-colors">
+                <span className="material-symbols-outlined text-[20px]">share</span> Share
+              </button>
+            </div>
+          </div>
+          
+          <div className="pt-4 flex justify-center">
+             <button className="px-6 py-2 rounded-full bg-surface-container hover:bg-surface-container-high transition-colors text-sm font-bold text-on-surface shadow-sm border border-outline-variant/30">
+               Load More Activity
+             </button>
+          </div>
+
+        </div>
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ import InteractiveMap from '../pages/InteractiveMap';
 import ResponseTeamDash from '../pages/ResponseTeamDash';
 import UserProfile from '../pages/UserProfile';
 import Admin from '../pages/Admin';
+import Alerts from '../pages/Alerts';
 import PrivateRoute from './PrivateRoute';
 import RoleRoute from './RoleRoute';
 
@@ -51,6 +52,7 @@ const AppRoutes = () => {
           <Route path="/sos" element={<SosFlow />} />
           <Route path="/map" element={<InteractiveMap />} />
           <Route path="/profile" element={<UserProfile />} />
+          <Route path="/alerts" element={<Alerts />} />
         </Route>
       </Route>
     </Routes>
