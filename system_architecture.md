@@ -40,9 +40,9 @@ This document is the single source of truth for how the system is built. It repl
 - React (Vite)
 - React Router
 - Redux Toolkit
-- Tailwind CSS
+- Vanilla CSS / Tailwind CSS
 - Axios
-- Leaflet + OpenStreetMap (via `react-leaflet`, clustering via `react-leaflet-cluster`)
+- Google Maps API (via `@react-google-maps/api`)
 - Socket.io Client
 
 **Backend**
@@ -56,7 +56,7 @@ This document is the single source of truth for how the system is built. It repl
 - Firebase-issued JWT ID tokens, verified server-side
 
 **Maps**
-- Leaflet with free OpenStreetMap tiles (zero hosting cost)
+- Google Maps API with domain-restricted key and dynamic cluster/marker rendering
 
 ---
 
@@ -288,37 +288,37 @@ Used strictly for broadcasting — not for request/response logic. Kept to a sma
 
 ## 15. Notification System
 
-- **Storage:** every notification is a document in the `notifications` collection, queried via the `{ recipientId, read, createdAt }` compound index — no separate delivery infrastructure needed for the in-app drawer.
-- **Two triggers:**
-  1. **Suspicious report detection** (§17.4) → notifies Reporters + Admins with report summary data.
-  2. **Proximity match** → notifies regular Users/Volunteers when a *non-suspicious* report's location matches their home address, current address, or live GPS.
-- **Polymorphic by design:** the same schema and the same drawer UI show both incident alerts and account alerts (e.g. "your NID was approved").
-- **Push notifications:** Firebase Cloud Messaging (FCM) token registration is planned but not required for the initial build — the schema is ready for it when needed.
+- **Storage:** Every notification is a document in the `notifications` collection, queried via the `{ recipientId, read, createdAt }` compound index — no separate delivery infrastructure needed for the in-app drawer.
+- **Three Core Triggers:**
+  1. **Comment Notifications** → When a user comments on a report (or includes a comment with a downvote), a notification is created for the report issuer (`recipientId`) and emitted in real-time over Socket.io to `user:<issuerId>`.
+  2. **Suspicious Report Detection** (§17.4) → Notifies Reporters + Admins with report summary data.
+  3. **Proximity Match & Escalation** → Notifies regular Users/Volunteers when a report matches their active area, or when response teams/reporters are assigned.
+- **Polymorphic by Design:** The same schema and drawer UI handle both incident alerts and account alerts (e.g., "account verification pending").
 
 ---
 
 ## 16. Map System
 
-- **Rendering:** Leaflet with free OpenStreetMap tiles via `react-leaflet` — no paid map API keys required for the shipped product (a Google Maps demo key may be used temporarily during early prototyping, but OSM is the production choice).
-- **Marker color coding:**
+- **Rendering:** Google Maps API via `@react-google-maps/api` with custom marker rendering and dynamic map bounds.
+- **Marker Color Coding:**
   - 🔴 Red — Major Report **or** active Victim Mode
   - 🟠 Orange — Standard Major Report
   - 🟡 Yellow — Minor Report, unverified
   - 🟢 Green — Verified/Resolved
   - ⚫ Grey — Flagged as false
-- **Clustering:** `react-leaflet-cluster` groups dense incident areas into numbered bubbles at low zoom.
-- **Geospatial queries:** all "nearby" lookups use MongoDB `2dsphere` indexes (`$near` / `$geoWithin`) — filtering happens at the database layer, not in application code.
+- **Geospatial Queries:** All "nearby" lookups use MongoDB `2dsphere` indexes (`$near` / `$geoWithin`) — filtering happens at the database layer.
 
 ---
 
 ## 17. Core Business Workflows
 
-### 17.1 Report Creation & Duplicate Detection
-Before saving any new report, the backend checks for an existing **active** report of the same category within a radius, created in the last 3 hours:
-- Minor reports: 50–100m radius
-- Major reports: 500m–1km radius
+### 17.1 Report Creation & Hybrid Time Window Duplicate Engine
+Before saving any new report, the backend checks for an existing **active** report matching the exact same `category` and falling within a geospatial radius using a **Hybrid Time Window Engine**:
 
-If a match is found, creation is aborted with `409 Conflict` and the existing report's ID, so the frontend can redirect the citizen to upvote/comment on the existing report instead of creating a duplicate pin.
+- **Minor Reports:** 200-meter radius, **3-hour time window** (`createdAt >= 3 hours ago`). This prevents old or forgotten minor reports (e.g. traffic hazards or street fights) from locking down an area indefinitely.
+- **Major Reports:** 500-meter radius, **NO time window**. A major incident (e.g. flood or cyclone) remains an active duplicate until a verified Reporter or Admin officially marks it as closed, regardless of how many days it lasts.
+
+If a match is found, report creation is intercepted and returns an **HTTP 409 Conflict** response with the existing report's `postId` and data, allowing the frontend to redirect the user directly to the existing report.
 
 ### 17.2 Victim Mode (SOS)
 A citizen attaches themselves as a victim to an *existing* active report (not a new broadcast) by confirming their phone number and live GPS.

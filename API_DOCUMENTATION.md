@@ -224,7 +224,9 @@ sequenceDiagram
 * **Conditions:**
   * Only `Reporter`, `Admin`, or `SuperAdmin` can set `type: "major"`. Standard citizens setting `major` get `403 Forbidden`.
   * `type: "major"` requires `impactAreas` array.
-  * Automatically checks for duplicate reports within 100m (Minor) or 500m (Major) in the last 3 hours.
+  * **Duplicate Detection (Hybrid Time Window Engine):**
+    * **Minor Reports:** Intercepts creation if an active report of the same category exists within **200m** created in the last **3 hours**.
+    * **Major Reports:** Intercepts creation if an active report of the same category exists within **500m** regardless of time until officially closed.
 * **Request Body:**
   ```json
   {
@@ -282,11 +284,11 @@ sequenceDiagram
 * **Request Body:**
   ```json
   {
-    "type": "upvote", // "upvote" or "downvote"
-    "comment": "Can confirm this is real" // Required if type is "downvote"
+    "type": "upvote", // "type" or "vote" key ("upvote" or "downvote")
+    "comment": "Can confirm this is real" // Optional: comment text
   }
   ```
-* **Behavior:** Triggers Phase 4.2 Fake-Report Detection asynchronously. If votes match suspicious criteria, report reliability is set to `"false"` and authorities are alerted.
+* **Behavior:** Supports vote toggling (repeating a vote removes it; switching toggles counts). If a downvote includes a comment, it automatically notifies the report issuer. Also triggers Phase 4.2 Fake-Report Detection asynchronously.
 
 ---
 

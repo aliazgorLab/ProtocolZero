@@ -12,40 +12,19 @@ Citizens report incidents on a map. Nearby users vote to sort real reports from 
 
 ## Stack
 
-React (Vite) + Redux Toolkit + Tailwind on the client. Express + Mongoose + Socket.io on the server. MongoDB Atlas with three collections (`User`, `Report`, `Notification`). Firebase owns authentication; MongoDB stores profiles only. Map is Google Maps in the code (the doc says Leaflet — see below).
+React (Vite) + Redux Toolkit + Vanilla CSS / Tailwind on the client. Express + Mongoose + Socket.io on the server. MongoDB Atlas with three collections (`User`, `Report`, `Notification`). Firebase owns authentication; MongoDB stores profiles only. Map uses Google Maps API via `@react-google-maps/api`.
 
 Flow is flat and should stay flat: route → controller → service (only where logic is non-trivial) → model.
 
-## What already works
+## Core Architectural Decisions (Aligned & Shipped)
 
-- **Models** — `User`, `Report`, `Notification`, `PointSchema` with `2dsphere` indexes. Solid, barely needs touching.
-- **Auth** — Firebase token verification middleware, idempotent `/auth/register` profile sync, email-OTP 2FA on the backend.
-- **Report CRUD** — create, nearby, detail, update, vote, comment, victim-attach. Duplicate-radius check works.
-- **Service extraction** — `report.service.js` already holds the geospatial and notification logic.
-
-## What's broken
-
-- `server/routes/.env` and `client/.env` are **tracked by git**.
-- Client role strings are lowercase (`reporter`), server enums are PascalCase (`Reporter`). Every client-side role check silently fails.
-- `toggleVolunteerMode` guards on `Report.resourcesCommitted`, a field that doesn't exist. Dead code.
-- `ResponseTeamSignUp.jsx` offers a `dispatcher` role the schema rejects.
-- `<RoleRoute>` is commented out in `AppRoutes.jsx`.
-- OTP has two competing client paths (inline in `Login.jsx` plus a separate `OtpVerification.jsx` with fake timers).
-- `LiveIncidentMap.jsx` uses raw `axios`; `authSlice.js` hardcodes `localhost:5000`.
-
-## What's missing
-
-Reliability scoring, fake-report detection, Socket.io entirely, notification retrieval endpoints, the resources API, and the admin dashboard.
-
-**Roughly 35–40% done.** The skeleton is good; the interesting parts aren't built.
-
-## Three decisions to make in the first hour
-
-Write them in a comment at the top of the relevant file so nobody re-opens them:
-
-1. **Map** — code uses Google Maps, doc says Leaflet/OSM. If Google already renders markers and clustering, keep it and update the doc. Just restrict the API key by domain. If it's not working yet, switch to Leaflet — it's free and needs no key.
-2. **2FA** — code does Firebase password + custom email OTP as a second factor. That's better than what the doc describes. Keep it, update the doc.
-3. **Volunteer guard** — add a `resourcesCommitted` array to `Report` so the existing guard becomes real. This also gives you the resources endpoint for free.
+1. **Map Engine** — Google Maps API (`@react-google-maps/api`) with custom color-coded markers and dynamic bounds.
+2. **2FA & OTP** — Firebase authentication coupled with email 6-digit OTP verification.
+3. **Duplicate Detection Engine** — Hybrid Time Window Engine:
+   - Minor Reports: 200m radius, 3-hour window.
+   - Major Reports: 500m radius, NO time window (active until closed).
+4. **Vetted Registration** — Single `/signup/vetted` flow handling `Reporter` and `ResponseTeam` (sub-roles `police`, `firefighter`, `civilsurgeon`) with facial verification image compression & 50MB payload limit.
+5. **Comment Notifications** — Any comment on a report (or optional comment on downvote) automatically generates a database `Notification` for the report issuer and dispatches a real-time `notification:new` socket event to `user:<issuerId>`.
 
 ---
 
