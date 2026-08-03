@@ -1,28 +1,26 @@
 # Protocol Zero — Master Execution Design Plan (Remaining Scope)
 
 **Status:** Active Master Execution Guide  
-**Purpose:** Precise, step-by-step engineering instructions for AI agents and developers to complete all remaining frontend, backend, socket, and database features of Protocol Zero.
+**Scope:** Exhaustive engineering guide for completing 100% of remaining Protocol Zero features.
 
----
-
-## 🎯 Executive Overview & Scope
-
-Protocol Zero's core infrastructure (Firebase Auth, Report CRUD, Geospatial 2dsphere indexing, Base Socket.io transport, Google Maps integration, Vetted Registration, and Comment Notifications) is fully built and operating in production.
-
-This document covers **100% of the remaining work** required to take Protocol Zero to complete, production-ready status.
+> **CRITICAL NOTE ON EXECUTION ORDER:**  
+> Phase 7 (Pre-Registration Email OTP Verification) is strictly placed at the **VERY LAST** position — to be implemented only after all features in Phases 1–6 are fully built, integrated, and verified through testing.
 
 ---
 
 # 🚀 Phase 1: Fixed Emergency Resource Taxonomy & Logistics System
 
 ### Objective
-Eliminate free-text resource input. Establish an immutable, standardized emergency resource taxonomy across server and client, allowing Report Authors to request precise supplies, Response Teams to commit official units, and Volunteers to manage personal emergency inventory.
+Eliminate free-text resource entries across the system. Establish a standardized, immutable emergency resource taxonomy in both server and client, enabling Report Authors to specify required supplies from an official catalog, Response Teams to commit official units, and Volunteers to manage personal inventory.
 
-### 1.1 Server-Side Resource Taxonomy (`server/constants/resources.js`)
-Create `server/constants/resources.js` defining the official emergency resource catalog:
+---
+
+### 1.1 Server & Client Resource Taxonomy Definition
+Create `server/constants/resources.js` and `client/src/constants/resources.js` with the exact standardized catalog:
+
 ```javascript
 const RESOURCE_TAXONOMY = [
-  { id: "water_packets", name: "Drinking Water (bottle)", category: "Water", defaultUnit: "bottles" },
+  { id: "water_bottles", name: "Drinking Water (bottle)", category: "Water", defaultUnit: "bottles" },
   { id: "dry_food_kits", name: "Dry Food Rations", category: "Food", defaultUnit: "kits" },
   { id: "first_aid_kits", name: "First Aid Medical Kits", category: "Medical", defaultUnit: "kits" },
   { id: "emergency_blankets", name: "Emergency Blankets", category: "Shelter", defaultUnit: "units" },
@@ -34,165 +32,259 @@ const RESOURCE_TAXONOMY = [
   { id: "portable_generators", name: "Portable Power Generators", category: "Equipment", defaultUnit: "units" },
   { id: "sandbags", name: "Flood Sandbags", category: "Supplies", defaultUnit: "bags" },
 ];
+
+const RESOURCE_CATEGORIES = ["Water", "Food", "Medical", "Shelter", "Equipment", "Response", "Supplies"];
+
+module.exports = { RESOURCE_TAXONOMY, RESOURCE_CATEGORIES };
 ```
 
-### 1.2 Resource Schema & Validator (`server/middleware/validators.js`)
-Update `Report.js` and `validators.js`:
-- Validate that any `itemName` submitted in `resourcesNeeded` or `resourcesCommitted` exists within `RESOURCE_TAXONOMY`.
-- Ensure `quantity` is a positive integer (`> 0`).
+---
+
+### 1.2 Resource Middleware & Validation (`server/middleware/validators.js`)
+- Update `validateReportResources`:
+  - Validate that `itemId` exists within `RESOURCE_TAXONOMY`.
+  - Validate that `quantity` is a positive integer (`quantity > 0`).
+  - Automatically populate `itemName`, `category`, and `unit` from `RESOURCE_TAXONOMY` server-side to prevent payload spoofing.
+
+---
 
 ### 1.3 Resource API Endpoints (`server/controllers/resource.controller.js`)
-- `GET /api/resources/taxonomy` — Public endpoint returning the `RESOURCE_TAXONOMY` array for dropdowns.
-- `PATCH /api/reports/:id/resources-needed` — Restrict to Report Author or Admin. Body: `{ resourcesNeeded: [{ itemId, quantity }] }`.
-- `PATCH /api/reports/:id/resources` — Restrict to `ResponseTeam` role only. Body: `{ resourcesCommitted: [{ itemId, quantity, location }] }`. Emits socket event `report:resource_committed` to geo room and report view.
-- `PATCH /api/users/inventory/deduct` — Restrict to `Volunteer` role. Deducts deployed supplies from their personal profile inventory when responding.
-
-### 1.4 Frontend Resource UI Integration
-- Update `CreateReport.jsx` and `ReportDetail.jsx`: Replace all text inputs for resources with custom searchable dropdowns populated by `RESOURCE_TAXONOMY`.
-- Add "Official Assets Committed" visual panel on `ReportDetail.jsx` showing Response Team deployments with live Google Maps coordinate pins.
+1. **`GET /api/resources/taxonomy`**:
+   - Access: Public / Authenticated
+   - Response: `{ success: true, data: { taxonomy: RESOURCE_TAXONOMY, categories: RESOURCE_CATEGORIES } }`
+2. **`PATCH /api/reports/:id/resources-needed`**:
+   - Access: Protected (Report Author or Admin only)
+   - Body: `{ resourcesNeeded: [{ itemId: "water_bottles", quantity: 100 }] }`
+3. **`PATCH /api/reports/:id/resources`**:
+   - Access: Protected (`ResponseTeam` only)
+   - Body: `{ resourcesCommitted: [{ itemId: "ambulances", quantity: 2, location: { type: "Point", coordinates: [90.4125, 23.8103] } }] }`
+   - Emits real-time Socket.io event `report:resource_committed` to geo room and report detail room.
+4. **`PATCH /api/users/inventory/deduct`**:
+   - Access: Protected (`Volunteer` or `ResponseTeam`)
+   - Deducts items from personal profile inventory upon field deployment.
 
 ---
 
-# 🔐 Phase 2: Registration OTP Verification Flow
+### 1.4 Frontend UI Integration
+- **`CreateReport.jsx` & `ReportDetail.jsx`**:
+  - Replace text input fields with category-filtered dropdown selectors referencing `RESOURCE_TAXONOMY`.
+  - Auto-fill unit badge (e.g. "bottles", "kits", "vehicles") based on selected item.
+- **"Official Assets Committed" Panel (`ReportDetail.jsx`)**:
+  - Display dedicated logistics card showing committed Response Team assets.
+  - Interactive button to highlight asset coordinates directly on the Google Map preview.
+
+---
+
+# 👮 Phase 2: Complete Admin Moderation Console & Verification Workflow
 
 ### Objective
-Prevent unverified or fake accounts from ever touching MongoDB by enforcing 6-digit Email OTP verification during the registration step.
-
-### 2.1 OTP Pre-Registration Protocol
-1. User completes registration form on `/signup` (Citizen/Volunteer) or `/signup/vetted` (Vetted Professional).
-2. Client sends pre-registration request: `POST /api/auth/send-registration-otp` with `{ email, phone }`.
-3. Server generates 6-digit OTP, hashes it using SHA-256 with a 10-minute expiry, sends email via Nodemailer/Firebase, and returns `{ tempRegistrationToken }`.
-4. Client navigates to `/otp-verification` holding `tempRegistrationToken` and registration payload in Redux state.
-5. User enters 6-digit OTP and submits.
-6. Client calls `POST /api/auth/verify-registration-otp` with `{ tempRegistrationToken, otp, registrationData }`.
-7. Server validates OTP:
-   - On mismatch/expiration: returns `400 Bad Request`.
-   - On success: clears OTP, registers user profile in MongoDB, and completes auth session.
-
-### 2.2 Frontend Registration Integration
-- Update `SignUp.jsx` and `VettedRegistration.jsx` to trigger the OTP modal/screen before final submission.
-- Update `OtpVerification.jsx` to support both Login 2FA verification and Registration OTP verification seamlessly.
+Provide a fully functional administration console (`/admin`) for system moderators to review pending professional applications, audit flagged low-trust accounts, and moderate community-reported false incidents.
 
 ---
 
-# 👮 Phase 3: Complete Admin Moderation Panel & Verification Workflow
+### 2.1 Backend Controller Logic (`server/controllers/admin.controller.js`)
+1. **Pending Professional Applications**:
+   - `GET /api/admin/pending-users`: Fetches users with `verificationStatus: "pending"`.
+   - `PATCH /api/admin/users/:userId/verify`: Body `{ status: "verified" | "rejected", reason?: "string" }`.
+     - Updates `user.verificationStatus`.
+     - Creates database `Notification` for applicant.
+     - Emits real-time socket event `user:verification_updated` to `user:<userId>`.
+     - Unlocks full role privileges (`Reporter` or `ResponseTeam`).
+2. **Low-Trust Flagged Accounts**:
+   - `GET /api/admin/flagged-users`: Queries users with `score <= -40`.
+3. **Escalated & Suspicious Reports**:
+   - `GET /api/admin/escalated-reports`: Returns reports with `reliability: "false"` or flagged by fake-report detection.
+   - `PATCH /api/admin/reports/:id/reliability`: Body `{ reliability: "valid" | "false" }`.
+     - Setting `valid`: Restores report, clears flag, resumes citizen alerts.
+     - Setting `false`: Permanently closes report as fake and applies -20 penalty to author's score.
+
+---
+
+### 2.2 Frontend Admin Console Layout (`client/src/pages/Admin.jsx`)
+Implement 3 main tabs with responsive data tables and action modals:
+
+#### **Tab 1: Pending Applications (`/admin#pending`)**
+- Application Card showing: Applicant Name, Account Type (`Reporter` or `ResponseTeam`), Sub-Role (`police`/`firefighter`/`civilsurgeon`), NID Number, Agency/Station Name, Office Address.
+- Modal Viewer for uploaded facial verification / ID photo.
+- Action Buttons:
+  - **`Approve`** (Green): Confirms approval, displays success toast.
+  - **`Reject`** (Red): Opens modal prompt for optional rejection reason before submitting.
+
+#### **Tab 2: Flagged Accounts (`/admin#flagged`)**
+- User Card showing: Name, Email, Phone, Current Score (e.g. `-50`), Total Reports Issued, False Report Count.
+- Action Buttons:
+  - **`Reset Score to 0`**: Clears penalty flags.
+  - **`Suspend Account`**: Marks user as `verificationStatus: "rejected"`.
+
+#### **Tab 3: Escalated Reports (`/admin#escalated`)**
+- Report Moderation Card showing: Post ID, Category, Author Name, Upvotes vs Downvotes ratio, and list of downvote comments.
+- Action Buttons:
+  - **`Restore Report (Mark Valid)`**: Restores status to `valid`.
+  - **`Confirm Fake & Close`**: Closes report as false, penalizes author.
+
+---
+
+# 🏠 Phase 3: User Profile & Geolocation Address Management
 
 ### Objective
-Fully operationalize `/admin` for platform administrators to verify vetted professionals, review flagged users, and moderate community-flagged false reports.
-
-### 3.1 Tab 1: Pending Vetted Applications (`/admin#pending`)
-- **Backend**: `GET /api/admin/pending-users` (returns users where `verificationStatus == 'pending'`).
-- **Backend Action**: `PATCH /api/admin/users/:userId/verify` Body: `{ status: 'verified' | 'rejected', reason?: string }`.
-- **Automated Workflow**:
-  - Updates `user.verificationStatus`.
-  - Creates database `Notification` for applicant.
-  - Emits real-time socket event `user:verification_updated` to `user:<userId>`.
-  - Upon approval, unlocks full operational privileges (`Reporter` or `ResponseTeam`).
-- **UI Components (`Admin.jsx`)**:
-  - Verification cards displaying Full Name, Role, NID Number, Agency/Station Name, Office Address, and expandable Facial/ID Document image.
-  - Approve & Reject action buttons with optional rejection reason modal.
-
-### 3.2 Tab 2: Flagged Users Review (`/admin#flagged-users`)
-- **Backend**: `GET /api/admin/flagged-users` (returns users with `score <= -40`).
-- **UI Components (`Admin.jsx`)**:
-  - Displays user score, total valid vs false reports issued, phone number, and status.
-  - Action buttons: `View User History`, `Issue Official Warning`, `Reset Score`, or `Suspend User`.
-
-### 3.3 Tab 3: Escalated & Suspicious Reports (`/admin#escalated-reports`)
-- **Backend**:
-  - `GET /api/admin/escalated-reports` (returns reports with `reliability == 'false'` or flagged by fake-report engine).
-  - `PATCH /api/admin/reports/:id/reliability` Body: `{ reliability: 'valid' | 'false' }`.
-- **UI Components (`Admin.jsx`)**:
-  - Reports card displaying Post ID, Category, Author Name, Upvotes vs Downvotes ratio, and community downvote comments.
-  - `Restore Report (Mark Valid)` button: Restores report to `reliability: 'valid'`, clears false flag, resumes citizen notifications.
-  - `Confirm Fake & Close` button: Permanently closes report as `reliability: 'false'` and applies -20 score penalty to issuer.
+Enable users to manage their personal profiles, toggle volunteer mode, manage emergency inventory, and set saved `homeAddress` and `currentAddress` with interactive Google Map pickers.
 
 ---
 
-# 👤 Phase 4: User Profile & Geolocation Address Management
+### 3.1 Backend Profile Controller (`server/controllers/user.controller.js`)
+- Update `PATCH /api/users/profile` to accept:
+  - `homeAddress` (string) & `homeAddressGps` (GeoJSON `Point`)
+  - `currentAddress` (string) & `currentAddressGps` (GeoJSON `Point`)
+- Validate coordinate array structure `[longitude, latitude]`.
+
+---
+
+### 3.2 Frontend User Profile Page (`client/src/pages/UserProfile.jsx`)
+1. **Identity & Status Card**:
+   - Displays Avatar, Name, Email, Phone, Account Type Badge, and `Verification Status Chip` (`verified`/`pending`/`rejected`).
+2. **Reliability Score Dial (Citizens/Volunteers)**:
+   - Visual score indicator (+10, -20). Red warning banner if `score <= -40`.
+3. **Saved Addresses Card (Interactive Google Map)**:
+   - Two location sections: 🏠 **Home Address** and 📍 **Current Address**.
+   - Search input box with Google Places autocomplete or manual pin placement on embedded map.
+   - Clicking map sets `[longitude, latitude]` coordinates and populates address string.
+4. **Volunteer Inventory Management**:
+   - Tab for `Volunteer` and `ResponseTeam` accounts.
+   - Add/Remove items using `RESOURCE_TAXONOMY` dropdowns and specify stock quantity.
+5. **Role Mode Toggle**:
+   - Switch between standard `User` and `Volunteer`.
+   - Backend guard blocks switching to `User` if currently assigned as a responder to an active report.
+
+---
+
+### 3.3 Map Component Integration (`client/src/pages/InteractiveMap.jsx`)
+- Add toggle overlay switches:
+  - 🏠 **Show My Home Address Pin**
+  - 📍 **Show My Current Location Pin**
+- Render distinct visual marker icons for home and current position alongside active incident markers.
+
+---
+
+# 🚑 Phase 4: Response Team Operations Command Dashboard
 
 ### Objective
-Enable users to manage their profile, toggle roles, and configure `homeAddress` and `currentAddress` with interactive map pickers.
-
-### 4.1 Address Geolocation & Map Integration
-- **Backend**: `PATCH /api/users/profile` accepts `homeAddress`, `homeAddressGps`, `currentAddress`, `currentAddressGps`.
-- **Frontend (`UserProfile.jsx`)**:
-  - Add "Location & Addresses" card with interactive Google Map pickers.
-  - Users can type an address or click directly on the map to place pins for 🏠 Home Address and 📍 Current Address.
-  - Synchronizes lat/lng GeoJSON `Point` coordinates (`[longitude, latitude]`).
-
-### 4.2 Volunteer Inventory & Mode Toggle
-- Allow Volunteers to add/remove items in their personal inventory using the `RESOURCE_TAXONOMY` catalog.
-- Mode Toggle (`User` ↔ `Volunteer`): Prevent reverting to `User` if assigned to an active report victim or resource commitment.
-
-### 4.3 Interactive Map Layer (`InteractiveMap.jsx`)
-- Render user's saved 🏠 Home Address and 📍 Current Address as optional reference layers on `InteractiveMap.jsx` with distinct visual pin icons.
+Provide a real-time operational command center (`/response-team/dashboard`) specifically tailored for Police, Firefighters, and Civil Surgeons.
 
 ---
 
-# 🚑 Phase 5: Response Team Operations Dashboard
+### 4.1 Dual-Pane Operational Interface (`client/src/pages/ResponseTeamDash.jsx`)
+- **Left Pane (Live Emergency Queue)**:
+  - Incident cards sorted by distance and urgency (Major reports & SOS alerts at top).
+  - Displays Post ID, Category, Distance (km), Victim Count, and Committed Assets.
+- **Right Pane (Google Command Map)**:
+  - Full interactive Google Map with live incident markers, victim pins, and deployed units.
+  - Clicking an incident centers map and filters queue.
+
+---
+
+### 4.2 Victim Details & Asset Commitment Modals
+- **Victim Info Drawer**:
+  - Clicking victim count on an incident opens full victim profile drawer.
+  - Displays Victim Name, Photo, Phone Number, Home Address, and Live GPS status.
+  - Highlights clear warning badge if location is a **Registered Address Fallback** rather than a live signal.
+- **One-Click Asset Commitment Modal**:
+  - Response teams click "Deploy Assets".
+  - Select item from `RESOURCE_TAXONOMY` (e.g. `Ambulance Vehicles` or `Fire Trucks`).
+  - Specify quantity and click map to place deployment coordinates.
+  - Sends `PATCH /api/reports/:id/resources`, updates report state, and broadcasts real-time socket event.
+
+---
+
+# 🔔 Phase 5: Notification Center, Real-Time Navigation & UI Polish
 
 ### Objective
-Provide a dedicated operational command view (`/response-team/dashboard`) for Police, Firefighters, and Civil Surgeons.
-
-### 5.1 Dual-Pane Operational Interface (`ResponseTeamDash.jsx`)
-- **Left Pane (Live Incident Queue)**:
-  - Lists active emergency reports sorted by proximity and severity (Major first).
-  - Shows victim count, committed assets, and SOS alerts.
-- **Right Pane (Command Map)**:
-  - Google Map displaying active incidents, victim location markers, and committed official units.
-  - Click on victim pin shows full contact info & live GPS (or fallback address indicator).
-
-### 5.2 One-Click Asset Deployment Modal
-- Response teams click "Commit Official Assets" on any report queue item.
-- Select asset type from `RESOURCE_TAXONOMY` (e.g. Ambulance, Fire Truck).
-- Pick deployment coordinates on map.
-- Submits `PATCH /api/reports/:id/resources`, updates report state, and broadcasts real-time socket event.
+Ensure all database notifications and socket alerts provide seamless deep-linking to target pages, coupled with end-to-end visual polish.
 
 ---
 
-# 🔔 Phase 6: Notification Drawer & Real-Time Navigation
+### 5.1 Interactive Notification Center (`client/src/pages/Alerts.jsx` & Top Drawer)
+- **Header**: Unread notification counter, **"Mark All as Read"** button (`PATCH /api/notifications/read-all`).
+- **Row Classification & Direct Navigation**:
+  - `report_comment` / `report_created` / `report_escalated` → Clicking row navigates directly to `/reports/:id`.
+  - `account_verification_pending` / `account_verification_status` → Clicking row navigates to `/profile` or `/admin`.
+- **Real-Time Append**: Socket event `notification:new` appends new notification item instantly to Redux state without requiring page reload.
+
+---
+
+### 5.2 Global UI & UX Hardening
+- Add loading skeleton states during data fetches.
+- Add empty-state illustrations for empty feeds, empty notification drawers, and zero search results.
+- Toast notifications for all success/failure API operations via `ToastProvider`.
+
+---
+
+# 🧪 Phase 6: Quality Assurance, Security Hardening & End-to-End Testing
 
 ### Objective
-Ensure 100% of system notifications (comments, verification alerts, proximity reports, account flags) route seamlessly to target pages upon user click.
-
-### 6.1 Interactive Notification Drawer & Page (`/notifications`)
-- Header badge showing unread count.
-- Action: "Mark All as Read" (`PATCH /api/notifications/read-all`).
-- Row click handlers:
-  - `report_comment` / `report_created` / `report_escalated` → Navigates directly to `/reports/:id`.
-  - `account_verification_pending` / `account_verification_status` → Navigates to `/profile` or `/admin`.
+Perform strict security auditing, NoSQL sanitization checks, and end-to-end system walkthrough testing before enabling production registration OTP.
 
 ---
 
-# 🧪 Phase 7: Quality Assurance, Security Pass & System Verification
+### 6.1 Security & PII Audit
+1. **Socket Payload Scrubbing**: Verify that `report:new`, `report:vote`, and `report:update` socket events contain zero victim PII (phone numbers, NIDs, or face images).
+2. **RBAC Guard Verification**: Test that unverified `pending` accounts cannot execute operational POST/PATCH endpoints.
+3. **NoSQL Injection Sanitization**: Verify `express-validator` rejects request bodies containing `$` or `.` characters.
+
+---
+
+### 6.2 End-to-End System Walkthrough Script
+Execute the full system lifecycle manually or via automated test script:
+1. **Admin Seed**: Run `npm run seed:admin`, log into `/admin`.
+2. **Vetted Signup**: Register as `Reporter` or `ResponseTeam` at `/signup/vetted` → state becomes `pending` → Admin approves application in `/admin#pending`.
+3. **Report Creation & Duplicate Check**: Create Minor report → attempt duplicate creation within 200m/3hr → verify HTTP 409 Conflict intercept.
+4. **Voting & Comment Alert**: Downvote report with comment → verify report issuer receives database notification & Socket.io alert.
+5. **SOS & Victim Fallback**: Activate SOS with GPS disabled → verify fallback to registered home address → verify Response Team sees fallback indicator on `/response-team/dashboard`.
+6. **Logistics Commitment**: Response Team commits `Fire Trucks` from taxonomy → verify real-time update on `ReportDetail.jsx`.
+
+---
+
+# 🔑 Phase 7 (FINAL PHASE): Pre-Registration Email OTP Verification Flow
+
+> **NOTE:** Implement this phase **ONLY** after Phases 1 through 6 are 100% complete and tested.
 
 ### Objective
-Perform end-to-end verification, security hardening, and final smoke test.
-
-### 7.1 Security Pass
-- Verify no PII (phone numbers, NID, face images) is leaked in public Socket.io broadcasts.
-- Ensure all route endpoints enforce strict RBAC middleware.
-- Confirm input sanitization against NoSQL injection (`$` and `.`).
-
-### 7.2 End-to-End Walkthrough Script
-1. Admin seeds via `npm run seed:admin` and logs into `/admin`.
-2. Vetted Reporter registers at `/signup/vetted` → receives OTP → Admin approves application in `/admin#pending`.
-3. Citizen creates Minor report → duplicate check intercepts if within 200m/3hr.
-4. User downvotes with comment → report issuer receives notification & socket alert.
-5. User triggers SOS → fallback to home address if GPS unavailable → Response Team sees live alert on `/response-team/dashboard`.
-6. Response Team commits official Fire Truck from taxonomy → updates report in real-time.
+Enforce 6-digit Email OTP verification during user registration, ensuring no unverified account can be written to MongoDB.
 
 ---
 
-## 📋 Execution Roadmap Table
+### 7.1 Server OTP Pre-Registration Controller (`server/controllers/auth.controller.js`)
+1. **`POST /api/auth/send-registration-otp`**:
+   - Accepts `{ email, phone }`.
+   - Generates crypto 6-digit OTP code, hashes it with SHA-256 with a 10-minute expiration.
+   - Sends OTP email to user.
+   - Returns temporary JWT token: `{ tempRegistrationToken }`.
+2. **`POST /api/auth/verify-registration-otp`**:
+   - Accepts `{ tempRegistrationToken, otp, registrationPayload }`.
+   - Validates OTP against stored hash and expiration.
+   - On valid OTP: Creates and persists `User` document in MongoDB, completes authentication session, and returns user profile.
 
-| Phase | Core Deliverable | Primary Files Touched |
+---
+
+### 7.2 Frontend Registration Integration (`client/src/pages/SignUp.jsx` & `VettedRegistration.jsx`)
+- Update registration submission flow:
+  - Form submit triggers `send-registration-otp`.
+  - Stores `tempRegistrationToken` and payload in Redux state.
+  - Redirects user to `/otp-verification?mode=registration`.
+- Update `OtpVerification.jsx`:
+  - Validates 6-digit OTP input.
+  - Calls `verify-registration-otp` to finalize MongoDB user creation.
+  - Displays success message and navigates to main application dashboard.
+
+---
+
+## 📋 Execution Roadmap Summary Table
+
+| Phase | Core Focus | Key Target Files |
 |---|---|---|
 | **Phase 1** | Fixed Resource Taxonomy & Allocation | `server/constants/resources.js`, `resource.controller.js`, `CreateReport.jsx`, `ReportDetail.jsx` |
-| **Phase 2** | Pre-Registration Email OTP Verification | `auth.controller.js`, `SignUp.jsx`, `VettedRegistration.jsx`, `OtpVerification.jsx` |
-| **Phase 3** | Complete Admin Moderation Console | `admin.controller.js`, `Admin.jsx`, `Notification.js` |
-| **Phase 4** | User Profile Address Map & Volunteer Inventory | `user.controller.js`, `UserProfile.jsx`, `InteractiveMap.jsx` |
-| **Phase 5** | Response Team Command Dashboard | `ResponseTeamDash.jsx`, `report.controller.js` |
-| **Phase 6** | Notification Center & Deep Linking | `notification.controller.js`, `App.jsx`, `Notifications.jsx` |
-| **Phase 7** | Security Pass & End-to-End Verification | Full Stack Audit |
+| **Phase 2** | Complete Admin Moderation Console | `admin.controller.js`, `Admin.jsx`, `Notification.js` |
+| **Phase 3** | User Profile Address Map & Inventory | `user.controller.js`, `UserProfile.jsx`, `InteractiveMap.jsx` |
+| **Phase 4** | Response Team Operations Command Dashboard | `ResponseTeamDash.jsx`, `report.controller.js` |
+| **Phase 5** | Notification Center & Deep Linking | `notification.controller.js`, `Alerts.jsx`, `App.jsx` |
+| **Phase 6** | Security Pass & End-to-End System Testing | Full Stack Audit & Walkthrough |
+| **Phase 7 (LAST)** | Pre-Registration Email OTP Verification | `auth.controller.js`, `SignUp.jsx`, `VettedRegistration.jsx`, `OtpVerification.jsx` |
