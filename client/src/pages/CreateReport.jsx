@@ -1,9 +1,59 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { GoogleMap, useJsApiLoader, Marker, Circle } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker, useGoogleMap } from '@react-google-maps/api';
 import { useToast } from '../context/ToastContext';
 import axiosInstance from '../api/axiosInstance';
+
+// Native Google Maps Circle wrapper to ensure 100% reliable lifecycle & deletion cleanup
+const ImpactCircle = ({ ia }) => {
+  const map = useGoogleMap();
+  const circleRef = useRef(null);
+
+  useEffect(() => {
+    if (!map) return;
+
+    const [latStr, lngStr] = (ia.coordinate || '').split(',').map((s) => s.trim());
+    const lat = parseFloat(latStr);
+    const lng = parseFloat(lngStr);
+    const radius = parseFloat(ia.radius);
+
+    if (isNaN(lat) || isNaN(lng) || isNaN(radius) || radius <= 0) {
+      if (circleRef.current) {
+        circleRef.current.setMap(null);
+        circleRef.current = null;
+      }
+      return;
+    }
+
+    if (!circleRef.current) {
+      circleRef.current = new window.google.maps.Circle({
+        map,
+        center: { lat, lng },
+        radius: radius,
+        fillColor: '#FF0000',
+        fillOpacity: 0.25,
+        strokeColor: '#FF0000',
+        strokeOpacity: 0.8,
+        strokeWeight: 2,
+      });
+    } else {
+      circleRef.current.setCenter({ lat, lng });
+      circleRef.current.setRadius(radius);
+      circleRef.current.setMap(map);
+    }
+
+    return () => {
+      if (circleRef.current) {
+        circleRef.current.setMap(null);
+        circleRef.current = null;
+      }
+    };
+  }, [map, ia.coordinate, ia.radius]);
+
+  return null;
+};
+
 const CreateReport = () => {
   const { user: currentUser } = useSelector((state) => state.auth);
   const currentUserRole = currentUser?.accountType || 'User';
@@ -21,9 +71,7 @@ const CreateReport = () => {
   });
 
   const [images, setImages] = useState([]);
-  const [impactAreas, setImpactAreas] = useState([
-    { id: 'initial-zone', coordinate: '22.3569, 91.7832', radius: '250' },
-  ]);
+  const [impactAreas, setImpactAreas] = useState([]);
   const [resources, setResources] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
@@ -163,8 +211,8 @@ const CreateReport = () => {
     )));
   };
 
-  const removeImpactArea = (index) => {
-    setImpactAreas((previous) => previous.filter((_, idx) => idx !== index));
+  const removeImpactArea = (idToRemove) => {
+    setImpactAreas((previous) => previous.filter((item) => item.id !== idToRemove));
   };
 
   const addResource = () => {
@@ -333,30 +381,9 @@ const CreateReport = () => {
                             draggable={true} 
                             onDragEnd={(e) => setLocationCoords({ lat: e.latLng.lat(), lng: e.latLng.lng() })} 
                           />
-                          {reportType === 'major' && impactAreas.map((ia, index) => {
-                            const [latStr, lngStr] = ia.coordinate.split(',').map(s => s.trim());
-                            const lat = parseFloat(latStr);
-                            const lng = parseFloat(lngStr);
-                            const radius = parseFloat(ia.radius);
-                            if (isNaN(lat) || isNaN(lng) || isNaN(radius)) return null;
-                            return (
-                              <Circle
-                                key={ia.id}
-                                center={{ lat, lng }}
-                                radius={radius}
-                                options={{
-                                  fillColor: "#FF0000",
-                                  fillOpacity: 0.2,
-                                  strokeColor: "#FF0000",
-                                  strokeOpacity: 0.8,
-                                  strokeWeight: 2,
-                                }}
-                                onUnmount={(circle) => {
-                                  if (circle) circle.setMap(null);
-                                }}
-                              />
-                            );
-                          })}
+                          {reportType === 'major' && impactAreas.map((ia) => (
+                            <ImpactCircle key={ia.id} ia={ia} />
+                          ))}
                         </GoogleMap>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-on-surface-variant font-bold text-sm">Loading Tactical Map...</div>
@@ -384,14 +411,24 @@ const CreateReport = () => {
                         <span className="material-symbols-outlined text-alert-red">crisis_alert</span>
                         <h4 className="text-sm font-bold text-alert-red uppercase tracking-wider">Impact Zones</h4>
                       </div>
-                      <button
-                        type="button"
-                        onClick={addImpactArea}
-                        className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-white text-alert-red px-3 py-1.5 rounded-full shadow-sm hover:bg-alert-red hover:text-white transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">add</span>
-                        Add Zone
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setImpactAreas([])}
+                          className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-alert-red/70 hover:text-alert-red hover:bg-alert-red/10 px-3 py-1.5 rounded-full transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete_sweep</span>
+                          Clear All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={addImpactArea}
+                          className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-white text-alert-red px-3 py-1.5 rounded-full shadow-sm hover:bg-alert-red hover:text-white transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">add</span>
+                          Add Zone
+                        </button>
+                      </div>
                     </div>
 
                     <div className="p-4 space-y-3">
@@ -409,12 +446,12 @@ const CreateReport = () => {
                             <input
                               value={impactArea.radius}
                               onChange={(event) => updateImpactArea(index, 'radius', event.target.value)}
-                              placeholder="Radius (m)"
-                              className="w-32 rounded-lg border border-alert-red/30 bg-surface-container-lowest px-4 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-alert-red focus:ring-1 focus:ring-alert-red placeholder:text-alert-red/40"
+                              placeholder="Radius (meters)"
+                              className="w-36 rounded-lg border border-alert-red/30 bg-surface-container-lowest px-4 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-alert-red focus:ring-1 focus:ring-alert-red placeholder:text-alert-red/40"
                             />
                             <button 
                               type="button" 
-                              onClick={() => removeImpactArea(index)}
+                              onClick={() => removeImpactArea(impactArea.id)}
                               className="p-2 text-alert-red/60 hover:text-white hover:bg-alert-red rounded-lg transition-colors shrink-0"
                             >
                               <span className="material-symbols-outlined">delete</span>
