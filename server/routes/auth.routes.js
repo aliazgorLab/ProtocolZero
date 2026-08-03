@@ -68,4 +68,13 @@ router.post("/verify-registration-otp", authController.verifyRegistrationOtp);
 // @access  Protected (Requires Firebase Bearer Token + OTP in body)
 router.post("/verify-otp", verifyFirebaseAuth, authController.verifyEmailOtp);
 
+// @route   POST /api/auth/login-precheck
+router.post("/login-precheck", authController.loginPrecheck);
+
+// @route   POST /api/auth/record-login-failure
+router.post("/record-login-failure", authController.recordLoginFailure);
+
+// @route   POST /api/auth/clear-login-failure
+router.post("/clear-login-failure", authController.clearLoginFailure);
+
 module.exports = router;

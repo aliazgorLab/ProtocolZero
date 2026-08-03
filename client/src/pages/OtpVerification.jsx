@@ -12,7 +12,7 @@ const OtpVerification = () => {
   const inputRefs = useRef([]);
 
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [timeLeft, setTimeLeft] = useState(59);
+  const [timeLeft, setTimeLeft] = useState(30);
   const [vettedSubmittedUser, setVettedSubmittedUser] = useState(null);
 
   const {
@@ -80,14 +80,14 @@ const OtpVerification = () => {
             email: registrationPayload.email
           }));
           showToast(`A new 6-digit verification code was sent to ${registrationPayload.email}.`, "success");
-          setTimeLeft(59);
+          setTimeLeft(30);
         }
       } catch (err) {
         showToast(typeof err === 'string' ? err : err?.message || "Failed to resend verification code.", "error");
       }
     } else {
       showToast("Verification code resent.", "info");
-      setTimeLeft(59);
+      setTimeLeft(30);
     }
   };
 
