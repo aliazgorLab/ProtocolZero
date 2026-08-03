@@ -34,13 +34,10 @@ const AppRoutes = () => {
       <Route path="/signup/vetted" element={<VettedRegistration />} />
       <Route path="/signup/reporter" element={<VettedRegistration />} />
       <Route path="/signup/response-team" element={<VettedRegistration />} />
+      <Route path="/admin" element={<Admin />} />
       
       {/* Private Routes */}
       <Route element={<PrivateRoute />}>
-        <Route element={<RoleRoute requiredRoles={['Admin', 'SuperAdmin']} />}>
-          <Route path="/admin" element={<Admin />} />
-        </Route>
-
         {/* Standalone Dashboard for Response Team */}
         <Route path="/response-team/dashboard" element={<ResponseTeamDash />} />
         

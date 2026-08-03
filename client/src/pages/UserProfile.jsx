@@ -12,6 +12,11 @@ const UserProfile = () => {
   const { showToast } = useToast();
   const [toggling2FA, setToggling2FA] = useState(false);
   const [gpsActive, setGpsActive] = useState(false);
+  const [resources, setResources] = useState([
+    { name: 'Fire Trucks', quantity: 3, unit: 'units' },
+    { name: 'Water Hoses', quantity: 10, unit: 'units' }
+  ]);
+  const [isEditingResources, setIsEditingResources] = useState(false);
 
   const { user: currentUser } = useSelector((state) => state.auth);
 
@@ -104,6 +109,14 @@ const UserProfile = () => {
     upvotes: '2.1k',
     twoFactorEnabled: currentUser?.twoFactorEnabled || false
   };
+
+  const isResponseTeam = displayUser.role === 'Response Team' || displayUser.role === 'ResponseTeam';
+
+  const addResource = () => setResources([...resources, { name: '', quantity: '', unit: '' }]);
+  const updateResource = (idx, field, val) => {
+    setResources(resources.map((res, i) => i === idx ? { ...res, [field]: val } : res));
+  };
+  const removeResource = (idx) => setResources(resources.filter((_, i) => i !== idx));
 
   return (
     <div className="bg-surface-container-lowest min-h-screen pb-24">
@@ -243,6 +256,76 @@ const UserProfile = () => {
               </div>
             </div>
           </div>
+
+          {/* Response Team Resources Section */}
+          {isResponseTeam && (
+            <div className="bg-surface-container rounded-xl shadow-sm overflow-hidden border border-outline-variant/30">
+              <div className="p-4 border-b border-outline-variant/30 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary">inventory</span>
+                  <h2 className="text-lg font-bold text-on-surface">Available Resources</h2>
+                </div>
+                <button 
+                  onClick={() => setIsEditingResources(!isEditingResources)}
+                  className="text-primary text-xs font-bold uppercase tracking-wider bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full transition-colors"
+                >
+                  {isEditingResources ? 'Save' : 'Edit'}
+                </button>
+              </div>
+              
+              <div className="p-4 space-y-3">
+                {!isEditingResources ? (
+                  resources.length > 0 ? (
+                    <div className="flex flex-col gap-2">
+                      {resources.map((res, i) => (
+                        <div key={i} className="flex justify-between items-center p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/30">
+                          <span className="font-bold text-sm text-on-surface">{res.name}</span>
+                          <span className="text-xs font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-1 rounded">
+                            {res.quantity} {res.unit}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-on-surface-variant font-medium italic text-center">No resources listed.</p>
+                  )
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {resources.map((res, i) => (
+                      <div key={i} className="flex gap-2 items-center">
+                        <input
+                          value={res.name}
+                          onChange={(e) => updateResource(i, 'name', e.target.value)}
+                          placeholder="Item"
+                          className="flex-1 min-w-0 rounded border border-primary/30 bg-surface-container-lowest px-2 py-1.5 text-xs text-on-surface outline-none focus:border-primary"
+                        />
+                        <input
+                          type="number"
+                          value={res.quantity}
+                          onChange={(e) => updateResource(i, 'quantity', e.target.value)}
+                          placeholder="Qty"
+                          className="w-14 shrink-0 rounded border border-primary/30 bg-surface-container-lowest px-2 py-1.5 text-xs text-on-surface outline-none focus:border-primary text-center"
+                        />
+                        <button 
+                          onClick={() => removeResource(i)}
+                          className="text-alert-red hover:bg-alert-red/10 p-1.5 rounded"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                        </button>
+                      </div>
+                    ))}
+                    <button 
+                      onClick={addResource}
+                      className="w-full flex items-center justify-center gap-1 text-xs font-bold uppercase text-primary border border-primary/30 border-dashed rounded-lg py-2 hover:bg-primary/5 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">add</span>
+                      Add Resource
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
         </div>
 
