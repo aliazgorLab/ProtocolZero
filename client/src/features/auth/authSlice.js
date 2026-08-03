@@ -207,6 +207,41 @@ export const updateLiveLocation = createAsyncThunk(
   }
 );
 
+export const sendRegistrationOtp = createAsyncThunk(
+  'auth/sendRegistrationOtp',
+  async ({ email, phone }, { rejectWithValue }) => {
+    try {
+      const res = await axiosInstance.post('/auth/send-registration-otp', { email, phone });
+      return res.data; // { success: true, tempRegistrationToken, email }
+    } catch (error) {
+      if (error.response) {
+        return rejectWithValue(error.response.data.message || 'Failed to send registration OTP.');
+      }
+      return rejectWithValue('Network error. Please check your connection.');
+    }
+  }
+);
+
+export const verifyRegistrationOtp = createAsyncThunk(
+  'auth/verifyRegistrationOtp',
+  async ({ tempRegistrationToken, otp, registrationPayload, idToken }, { rejectWithValue }) => {
+    try {
+      const headers = idToken ? { Authorization: `Bearer ${idToken}` } : {};
+      const res = await axiosInstance.post(
+        '/auth/verify-registration-otp',
+        { tempRegistrationToken, otp, registrationPayload },
+        { headers }
+      );
+      return { token: idToken || 'session_active', user: res.data.data };
+    } catch (error) {
+      if (error.response) {
+        return rejectWithValue(error.response.data.message || 'Registration OTP verification failed.');
+      }
+      return rejectWithValue('Network error. Please check your connection.');
+    }
+  }
+);
+
 const token = localStorage.getItem('token');
 let user = null;
 try {
@@ -220,6 +255,10 @@ const initialState = {
   isAuthenticated: !!token,
   requiresOtp: false,
   tempToken: null,
+  registrationToken: null,
+  registrationPayload: null,
+  registrationEmail: null,
+  isRegistrationOtpPending: false,
   isLoading: false,
   error: null,
 };
@@ -243,6 +282,10 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.requiresOtp = false;
       state.tempToken = null;
+      state.registrationToken = null;
+      state.registrationPayload = null;
+      state.registrationEmail = null;
+      state.isRegistrationOtpPending = false;
       state.error = null;
       localStorage.removeItem('token');
       localStorage.removeItem('user');
@@ -258,6 +301,18 @@ const authSlice = createSlice({
       state.requiresOtp = false;
       state.tempToken = null;
       state.error = null;
+    },
+    setRegistrationState(state, action) {
+      state.registrationToken = action.payload.token;
+      state.registrationPayload = action.payload.payload;
+      state.registrationEmail = action.payload.email;
+      state.isRegistrationOtpPending = true;
+    },
+    clearRegistrationState(state) {
+      state.registrationToken = null;
+      state.registrationPayload = null;
+      state.registrationEmail = null;
+      state.isRegistrationOtpPending = false;
     },
   },
   extraReducers: (builder) => {
@@ -336,6 +391,40 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload || 'Verification failed.';
       })
+      .addCase(sendRegistrationOtp.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(sendRegistrationOtp.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.registrationToken = action.payload.tempRegistrationToken;
+        state.registrationEmail = action.payload.email;
+        state.isRegistrationOtpPending = true;
+      })
+      .addCase(sendRegistrationOtp.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload || 'Failed to send registration OTP.';
+      })
+      .addCase(verifyRegistrationOtp.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(verifyRegistrationOtp.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload.user;
+        state.token = action.payload.token;
+        state.isAuthenticated = true;
+        state.isRegistrationOtpPending = false;
+        state.registrationToken = null;
+        state.registrationPayload = null;
+        state.registrationEmail = null;
+        localStorage.setItem('token', action.payload.token);
+        localStorage.setItem('user', JSON.stringify(action.payload.user));
+      })
+      .addCase(verifyRegistrationOtp.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload || 'Registration OTP verification failed.';
+      })
       .addCase(updateLiveLocation.fulfilled, (state, action) => {
         state.user = { ...state.user, ...action.payload };
         localStorage.setItem('user', JSON.stringify(state.user));
@@ -343,5 +432,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { setCredentials, logout, clearError, updateUser, resetOtpState } = authSlice.actions;
+export const { setCredentials, logout, clearError, updateUser, resetOtpState, setRegistrationState, clearRegistrationState } = authSlice.actions;
 export default authSlice.reducer;

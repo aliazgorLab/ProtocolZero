@@ -53,6 +53,16 @@ router.get("/me", verifyFirebaseAuth, authController.getCurrentUser);
 // @access  Protected (Requires Firebase Bearer Token)
 router.post("/login-check", verifyFirebaseAuth, authController.loginCheck);
 
+// @route   POST /api/auth/send-registration-otp
+// @desc    Pre-Registration Step 1: Dispatch 6-digit OTP code to email
+// @access  Public
+router.post("/send-registration-otp", authController.sendRegistrationOtp);
+
+// @route   POST /api/auth/verify-registration-otp
+// @desc    Pre-Registration Step 2: Validate OTP code & write user document to MongoDB
+// @access  Public (Optionally includes Bearer Token)
+router.post("/verify-registration-otp", authController.verifyRegistrationOtp);
+
 // @route   POST /api/auth/verify-otp
 // @desc    Step 2 of Login: Verify the 6-digit Email OTP
 // @access  Protected (Requires Firebase Bearer Token + OTP in body)

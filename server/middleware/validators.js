@@ -108,7 +108,7 @@ const validateResources = [
     .notEmpty()
     .withMessage("itemId is required.")
     .custom((itemId) => {
-      const match = RESOURCE_TAXONOMY.find((r) => r.id === itemId);
+      const match = RESOURCE_TAXONOMY.find((r) => r.id === itemId || r.name === itemId);
       if (!match) {
         throw new Error(`Invalid resource itemId: '${itemId}'`);
       }

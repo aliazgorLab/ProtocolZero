@@ -81,11 +81,13 @@ exports.toggleVolunteerMode = async (req, res) => {
  */
 exports.updateProfileAddresses = async (req, res) => {
   try {
-    const { currentAddress, homeAddress, gps, currentAddressGps, homeAddressGps, inventory } = req.body;
+    const { currentAddress, homeAddress, gps, currentAddressGps, homeAddressGps, inventory, avatar, face } = req.body;
     const userId = req.user._id;
 
     const updateData = {};
 
+    if (avatar !== undefined) updateData.avatar = avatar;
+    if (face !== undefined) updateData.face = face;
     if (currentAddress !== undefined) updateData.currentAddress = String(currentAddress).trim();
     if (homeAddress !== undefined) updateData.homeAddress = String(homeAddress).trim();
 

@@ -70,6 +70,9 @@ exports.updateInventory = async (req, res) => {
 // @desc    Commit resources to a report
 // @route   PATCH /api/reports/:id/resources
 // @access  Protected (ResponseTeam)
+// @desc    Commit resources to a report
+// @route   PATCH /api/reports/:id/resources
+// @access  Protected (ResponseTeam)
 exports.commitResources = async (req, res) => {
   try {
     const { id } = req.params;
@@ -82,16 +85,57 @@ exports.commitResources = async (req, res) => {
       });
     }
 
+    const providerUser = await User.findById(req.user._id);
+    if (!providerUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User account not found.",
+      });
+    }
+
+    // Step 1: Validate available inventory stock for every requested item
+    for (const item of items) {
+      const reqQty = Number(item.quantity) || 0;
+      if (reqQty <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Commitment quantity must be at least 1.",
+        });
+      }
+
+      const inputId = item.itemId || item.id;
+      const tax = RESOURCE_TAXONOMY.find((r) => r.id === inputId || r.name === inputId || r.name === item.itemName) || {};
+      const canonicalItemId = tax.id || inputId;
+      const itemName = tax.name || item.itemName || "resource item";
+
+      const userStockItem = providerUser.inventory.find(
+        (inv) => inv.itemId === canonicalItemId || inv.itemId === inputId || inv.id === canonicalItemId || inv.itemName === itemName || inv.itemName === inputId
+      );
+
+      const availableQty = userStockItem ? userStockItem.quantity : 0;
+
+      if (!userStockItem || availableQty < reqQty) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient inventory stock. You only have ${availableQty} ${itemName}(s) in your inventory stock. Cannot commit ${reqQty}.`,
+        });
+      }
+    }
+
     const newCommitments = [];
     for (const item of items) {
-      const tax = RESOURCE_TAXONOMY.find((r) => r.id === item.itemId || r.id === item.id);
+      const inputId = item.itemId || item.id;
+      const tax = RESOURCE_TAXONOMY.find((r) => r.id === inputId || r.name === inputId || r.name === item.itemName);
+      const canonicalItemId = tax ? tax.id : inputId;
+      const reqQty = Number(item.quantity);
+
       const commitment = {
         providerId: req.user._id,
-        itemId: item.itemId || item.id,
-        itemName: tax ? tax.name : item.itemName,
-        category: tax ? tax.category : item.category,
-        quantity: Number(item.quantity),
-        unit: tax ? tax.defaultUnit : item.unit,
+        itemId: canonicalItemId,
+        itemName: tax ? tax.name : item.itemName || "Resource Item",
+        category: tax ? tax.category : item.category || "Supplies",
+        quantity: reqQty,
+        unit: tax ? tax.defaultUnit : item.unit || "units",
         createdAt: new Date(),
       };
 
@@ -103,7 +147,22 @@ exports.commitResources = async (req, res) => {
       }
 
       newCommitments.push(commitment);
+
+      // Step 2: Deduct stock from provider's inventory
+      const stockIdx = providerUser.inventory.findIndex(
+        (inv) => inv.itemId === canonicalItemId || inv.itemId === inputId || inv.id === canonicalItemId || inv.itemName === commitment.itemName
+      );
+
+      if (stockIdx > -1) {
+        providerUser.inventory[stockIdx].quantity -= reqQty;
+        if (providerUser.inventory[stockIdx].quantity <= 0) {
+          providerUser.inventory.splice(stockIdx, 1);
+        }
+      }
     }
+
+    // Save updated provider inventory
+    await providerUser.save();
 
     const reportService = require("../services/report.service");
     const report = await reportService.resolveReportById(id);
@@ -139,7 +198,7 @@ exports.commitResources = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Resources committed successfully.",
+      message: "Resources committed successfully and inventory updated.",
       data: report.resourcesCommitted,
     });
   } catch (error) {

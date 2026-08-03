@@ -153,6 +153,17 @@ const ReportDetail = () => {
     }
   };
 
+  const userInventory = Array.isArray(currentUser?.inventory) ? currentUser.inventory.filter(i => i.quantity > 0) : [];
+  const selectedInvItem = userInventory.find(i => (i.itemId || i.id) === selectedCommitItem || i.itemName === selectedCommitItem) || userInventory[0];
+  const maxAvailableQty = selectedInvItem ? selectedInvItem.quantity : 0;
+
+  useEffect(() => {
+    if (userInventory.length > 0 && (!selectedCommitItem || !userInventory.some(i => (i.itemId || i.id) === selectedCommitItem || i.itemName === selectedCommitItem))) {
+      const firstItem = userInventory[0];
+      setSelectedCommitItem(firstItem.itemId || firstItem.id || firstItem.itemName);
+    }
+  }, [currentUser]);
+
   const handleCommitResourceSubmit = async (e) => {
     e.preventDefault();
     if (report?.status === 'closed') {
@@ -160,17 +171,35 @@ const ReportDetail = () => {
       return;
     }
 
+    if (userInventory.length === 0) {
+      showToast("You have no items in your inventory stock. Please update your stock in your User Profile first.", "warning");
+      return;
+    }
+
+    if (!selectedInvItem) {
+      showToast("Please select a valid inventory item.", "warning");
+      return;
+    }
+
     if (commitQuantity <= 0) {
-      showToast("Quantity must be greater than 0.", "warning");
+      showToast("Quantity must be at least 1.", "warning");
+      return;
+    }
+
+    if (commitQuantity > maxAvailableQty) {
+      showToast(`Insufficient stock! You only have ${maxAvailableQty} ${selectedInvItem.itemName || 'item'}(s) in your inventory stock.`, "warning");
       return;
     }
 
     try {
       setSubmittingCommitment(true);
+      const taxMatch = RESOURCE_TAXONOMY.find(t => t.id === (selectedInvItem.itemId || selectedInvItem.id) || t.name === selectedInvItem.itemName) || {};
+      const canonicalItemId = taxMatch.id || selectedInvItem.itemId || selectedInvItem.id || selectedInvItem.itemName;
+
       const payload = {
         items: [
           {
-            itemId: selectedCommitItem,
+            itemId: canonicalItemId,
             quantity: Number(commitQuantity),
           }
         ]
@@ -179,8 +208,20 @@ const ReportDetail = () => {
       const res = await axiosInstance.patch(`/reports/${id}/resources`, payload);
       if (res.data?.data) {
         setReport(prev => ({ ...prev, resourcesCommitted: res.data.data }));
+
+        // Deduct inventory stock locally in Redux
+        const updatedInv = userInventory.map(item => {
+          const isMatch = (item.itemId || item.id) === (selectedInvItem.itemId || selectedInvItem.id) || item.itemName === selectedInvItem.itemName;
+          if (isMatch) {
+            return { ...item, quantity: item.quantity - Number(commitQuantity) };
+          }
+          return item;
+        }).filter(item => item.quantity > 0);
+
+        dispatch(updateUser({ inventory: updatedInv }));
+
         setShowCommitModal(false);
-        showToast("Official asset committed to incident!", "success");
+        showToast(`Committed ${commitQuantity} x ${taxMatch.name || selectedInvItem.itemName} from inventory!`, "success");
       }
     } catch (err) {
       console.error("Failed to commit asset:", err);
@@ -445,9 +486,9 @@ const ReportDetail = () => {
             ) : (
               <div className="space-y-3">
                 {report.resourcesCommitted.map((committed, idx) => {
-                  const tax = RESOURCE_TAXONOMY.find(t => t.id === (committed.itemId || committed.id)) || {};
+                  const tax = RESOURCE_TAXONOMY.find(t => t.id === (committed.itemId || committed.id) || t.name === committed.itemName) || {};
                   return (
-                    <div key={idx} className="p-4 rounded-2xl border border-emerald-500/20 bg-surface-container-lowest flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+                    <div key={committed._id || committed.itemId || idx} className="p-4 rounded-2xl border border-emerald-500/20 bg-surface-container-lowest flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold shrink-0">
                           <span className="material-symbols-outlined text-xl">shield</span>
@@ -676,54 +717,98 @@ const ReportDetail = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCommitResourceSubmit} className="space-y-4">
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2 block">
-                  Select Equipment / Vehicle
-                </label>
-                <select
-                  value={selectedCommitItem}
-                  onChange={(e) => setSelectedCommitItem(e.target.value)}
-                  className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-3 text-sm font-bold text-on-surface outline-none focus:border-primary"
-                >
-                  {RESOURCE_TAXONOMY.map(item => (
-                    <option key={item.id} value={item.id}>
-                      [{item.category}] {item.name} ({item.defaultUnit})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2 block">
-                  Deployment Quantity
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={commitQuantity}
-                  onChange={(e) => setCommitQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-3 text-sm font-bold text-on-surface outline-none focus:border-primary"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2">
+            {userInventory.length === 0 ? (
+              <div className="py-6 px-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-center space-y-3">
+                <span className="material-symbols-outlined text-amber-500 text-4xl">inventory_2</span>
+                <p className="text-xs font-bold text-on-surface">No Available Items in Inventory</p>
+                <p className="text-xs text-on-surface-variant leading-relaxed">
+                  You currently have no stock available in your user inventory. Please add items under your <strong>User Profile</strong> before committing assets to incidents.
+                </p>
                 <button
                   type="button"
-                  onClick={() => setShowCommitModal(false)}
-                  className="flex-1 py-3 rounded-xl border border-outline-variant/30 text-xs font-bold uppercase tracking-wider hover:bg-surface-container transition"
+                  onClick={() => {
+                    setShowCommitModal(false);
+                    navigate('/profile');
+                  }}
+                  className="px-4 py-2 bg-primary text-white text-xs font-bold uppercase rounded-xl hover:bg-primary/90 transition cursor-pointer"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingCommitment}
-                  className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider transition disabled:opacity-50"
-                >
-                  {submittingCommitment ? 'Deploying...' : 'Deploy Asset'}
+                  Go To Profile Inventory
                 </button>
               </div>
-            </form>
+            ) : (
+              <form onSubmit={handleCommitResourceSubmit} className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2 block">
+                    Select Available Inventory Stock Item
+                  </label>
+                  <select
+                    value={selectedCommitItem}
+                    onChange={(e) => {
+                      setSelectedCommitItem(e.target.value);
+                      const sel = userInventory.find(i => (i.itemId || i.id) === e.target.value || i.itemName === e.target.value);
+                      if (sel && commitQuantity > sel.quantity) {
+                        setCommitQuantity(sel.quantity);
+                      }
+                    }}
+                    className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-3 text-xs font-bold text-on-surface outline-none focus:border-primary cursor-pointer"
+                  >
+                    {userInventory.map(item => {
+                      const tax = RESOURCE_TAXONOMY.find(t => t.id === (item.itemId || item.id) || t.name === item.itemName) || {};
+                      const cat = tax.category || item.category || 'Supplies';
+                      const name = tax.name || item.itemName || 'Resource Item';
+                      const val = item.itemId || item.id || item.itemName;
+                      return (
+                        <option key={val} value={val}>
+                          [{cat}] {name} — (Stock: {item.quantity} {item.unit || tax.defaultUnit || 'units'})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                      Deployment Quantity
+                    </label>
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded">
+                      Available Stock: {maxAvailableQty} {selectedInvItem?.unit || 'units'}
+                    </span>
+                  </div>
+                  <input
+                    type="number"
+                    min="1"
+                    max={maxAvailableQty}
+                    value={commitQuantity}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 1;
+                      setCommitQuantity(Math.min(maxAvailableQty, Math.max(1, val)));
+                    }}
+                    className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-3 text-sm font-bold text-on-surface outline-none focus:border-primary"
+                  />
+                  <p className="text-[10px] text-on-surface-variant mt-1 font-medium">
+                    You cannot enter a quantity greater than your available stock ({maxAvailableQty}).
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCommitModal(false)}
+                    className="flex-1 py-3 rounded-xl border border-outline-variant/30 text-xs font-bold uppercase tracking-wider hover:bg-surface-container transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingCommitment || maxAvailableQty === 0}
+                    className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider transition disabled:opacity-50 cursor-pointer shadow-md"
+                  >
+                    {submittingCommitment ? 'Deploying...' : 'Deploy Asset'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

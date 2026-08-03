@@ -115,19 +115,54 @@ const ResponseTeamDash = () => {
     }
   };
 
+  const dispatch = useDispatch();
+
+  const userInventory = Array.isArray(currentUser?.inventory) ? currentUser.inventory.filter(i => i.quantity > 0) : [];
+  const selectedInvItem = userInventory.find(i => (i.itemId || i.id) === selectedAssetItem || i.itemName === selectedAssetItem) || userInventory[0];
+  const maxAvailableQty = selectedInvItem ? selectedInvItem.quantity : 0;
+
+  useEffect(() => {
+    if (userInventory.length > 0 && (!selectedAssetItem || !userInventory.some(i => (i.itemId || i.id) === selectedAssetItem || i.itemName === selectedAssetItem))) {
+      const firstItem = userInventory[0];
+      setSelectedAssetItem(firstItem.itemId || firstItem.id || firstItem.itemName);
+    }
+  }, [currentUser]);
+
   // Commit Asset Submission
   const handleCommitAssetSubmit = async (e) => {
     e.preventDefault();
     if (!committingAssetReport) return;
 
+    if (userInventory.length === 0) {
+      showToast("You have no items in your inventory stock. Please update your stock in your User Profile first.", "warning");
+      return;
+    }
+
+    if (!selectedInvItem) {
+      showToast("Please select a valid inventory item.", "warning");
+      return;
+    }
+
+    if (assetQuantity <= 0) {
+      showToast("Quantity must be at least 1.", "warning");
+      return;
+    }
+
+    if (assetQuantity > maxAvailableQty) {
+      showToast(`Insufficient stock! You only have ${maxAvailableQty} ${selectedInvItem.itemName || 'item'}(s) in your inventory stock.`, "warning");
+      return;
+    }
+
     const reportId = committingAssetReport._id || committingAssetReport.postId;
     try {
       setSubmittingAsset(true);
-      const tax = RESOURCE_TAXONOMY.find(t => t.id === selectedAssetItem) || RESOURCE_TAXONOMY[0];
+      const taxMatch = RESOURCE_TAXONOMY.find(t => t.id === (selectedInvItem.itemId || selectedInvItem.id) || t.name === selectedInvItem.itemName) || {};
+      const canonicalItemId = taxMatch.id || selectedInvItem.itemId || selectedInvItem.id || selectedInvItem.itemName;
+
       const payload = {
         items: [
           {
-            itemId: tax.id,
+            itemId: canonicalItemId,
             quantity: Number(assetQuantity),
           }
         ]
@@ -135,7 +170,19 @@ const ResponseTeamDash = () => {
 
       const res = await axiosInstance.patch(`/reports/${reportId}/resources`, payload);
       if (res.data?.data) {
-        showToast(`Committed ${assetQuantity} x ${tax.name} to Incident ${committingAssetReport.postId || reportId}!`, "success");
+        showToast(`Committed ${assetQuantity} x ${taxMatch.name || selectedInvItem.itemName} from your inventory stock!`, "success");
+
+        // Deduct inventory locally in Redux
+        const updatedInv = userInventory.map(item => {
+          const isMatch = (item.itemId || item.id) === (selectedInvItem.itemId || selectedInvItem.id) || item.itemName === selectedInvItem.itemName;
+          if (isMatch) {
+            return { ...item, quantity: item.quantity - Number(assetQuantity) };
+          }
+          return item;
+        }).filter(item => item.quantity > 0);
+
+        dispatch(updateUser({ inventory: updatedInv }));
+
         setCommittingAssetReport(null);
         fetchTacticalReports();
       }
@@ -514,54 +561,98 @@ const ResponseTeamDash = () => {
               Deploying heavy equipment / vehicles to incident <strong className="text-white">{committingAssetReport.postId || committingAssetReport._id}</strong> ({committingAssetReport.category}).
             </p>
 
-            <form onSubmit={handleCommitAssetSubmit} className="space-y-4">
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 block">
-                  Select Resource Equipment / Vehicle
-                </label>
-                <select
-                  value={selectedAssetItem}
-                  onChange={(e) => setSelectedAssetItem(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 p-3 text-xs font-bold text-white outline-none focus:border-emerald-500 cursor-pointer"
-                >
-                  {RESOURCE_TAXONOMY.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      [{item.category}] {item.name} ({item.defaultUnit})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 block">
-                  Deployment Quantity
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={assetQuantity}
-                  onChange={(e) => setAssetQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 p-3 text-xs font-bold text-white outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2">
+            {userInventory.length === 0 ? (
+              <div className="py-6 px-4 bg-amber-950/60 border border-amber-800 rounded-2xl text-center space-y-3">
+                <span className="material-symbols-outlined text-amber-400 text-4xl">inventory_2</span>
+                <p className="text-xs font-bold text-white">No Items Available in Stock Inventory</p>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  You currently have no stock available in your user inventory. Please add items in your <strong>User Profile</strong> before deploying assets.
+                </p>
                 <button
                   type="button"
-                  onClick={() => setCommittingAssetReport(null)}
-                  className="flex-1 py-3 rounded-xl border border-slate-700 text-xs font-bold uppercase tracking-wider text-slate-300 hover:bg-slate-800 cursor-pointer"
+                  onClick={() => {
+                    setCommittingAssetReport(null);
+                    navigate('/profile');
+                  }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase rounded-xl transition cursor-pointer"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingAsset}
-                  className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider transition active:scale-95 cursor-pointer disabled:opacity-50"
-                >
-                  {submittingAsset ? 'Deploying...' : 'Confirm Deployment'}
+                  Go To Profile Inventory
                 </button>
               </div>
-            </form>
+            ) : (
+              <form onSubmit={handleCommitAssetSubmit} className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                    Select Available Inventory Stock Item
+                  </label>
+                  <select
+                    value={selectedAssetItem}
+                    onChange={(e) => {
+                      setSelectedAssetItem(e.target.value);
+                      const sel = userInventory.find(i => (i.itemId || i.id) === e.target.value || i.itemName === e.target.value);
+                      if (sel && assetQuantity > sel.quantity) {
+                        setAssetQuantity(sel.quantity);
+                      }
+                    }}
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 p-3 text-xs font-bold text-white outline-none focus:border-emerald-500 cursor-pointer"
+                  >
+                    {userInventory.map((item) => {
+                      const tax = RESOURCE_TAXONOMY.find(t => t.id === (item.itemId || item.id) || t.name === item.itemName) || {};
+                      const cat = tax.category || item.category || 'Supplies';
+                      const name = tax.name || item.itemName || 'Resource Item';
+                      const val = item.itemId || item.id || item.itemName;
+                      return (
+                        <option key={val} value={val}>
+                          [{cat}] {name} — (Stock: {item.quantity} {item.unit || tax.defaultUnit || 'units'})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Deployment Quantity
+                    </label>
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
+                      Stock: {maxAvailableQty} {selectedInvItem?.unit || 'units'}
+                    </span>
+                  </div>
+                  <input
+                    type="number"
+                    min="1"
+                    max={maxAvailableQty}
+                    value={assetQuantity}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 1;
+                      setAssetQuantity(Math.min(maxAvailableQty, Math.max(1, val)));
+                    }}
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 p-3 text-xs font-bold text-white outline-none focus:border-emerald-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1 font-medium">
+                    Maximum quantity is capped by your available inventory stock ({maxAvailableQty}).
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setCommittingAssetReport(null)}
+                    className="flex-1 py-3 rounded-xl border border-slate-700 text-xs font-bold uppercase tracking-wider text-slate-300 hover:bg-slate-800 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingAsset || maxAvailableQty === 0}
+                    className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider transition active:scale-95 cursor-pointer disabled:opacity-50"
+                  >
+                    {submittingAsset ? 'Deploying...' : 'Confirm Deployment'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

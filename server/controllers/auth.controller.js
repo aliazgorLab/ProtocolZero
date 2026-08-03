@@ -362,3 +362,250 @@ exports.verifyEmailOtp = async (req, res) => {
   }
 };
 
+const crypto = require("crypto");
+const JWT_SECRET = process.env.JWT_SECRET || "protocol_zero_secure_registration_secret_key";
+
+const generateRegistrationToken = (email, phone, otp) => {
+  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+  const otpHash = crypto.createHmac("sha256", JWT_SECRET).update(`${otp}:${email}:${expiresAt}`).digest("hex");
+  const payload = JSON.stringify({ email, phone, expiresAt, otpHash });
+  const signature = crypto.createHmac("sha256", JWT_SECRET).update(payload).digest("hex");
+  return Buffer.from(JSON.stringify({ payload, signature })).toString("base64");
+};
+
+const verifyRegistrationTokenHelper = (tokenStr, inputOtp) => {
+  try {
+    const decoded = JSON.parse(Buffer.from(tokenStr, "base64").toString("utf-8"));
+    const { payload, signature } = decoded;
+    const expectedSignature = crypto.createHmac("sha256", JWT_SECRET).update(payload).digest("hex");
+
+    if (signature !== expectedSignature) {
+      return { valid: false, message: "Invalid registration token signature." };
+    }
+
+    const { email, phone, expiresAt, otpHash } = JSON.parse(payload);
+    if (Date.now() > expiresAt) {
+      return { valid: false, message: "Registration OTP has expired. Please request a new verification code." };
+    }
+
+    const inputHash = crypto.createHmac("sha256", JWT_SECRET).update(`${inputOtp}:${email}:${expiresAt}`).digest("hex");
+    if (inputHash !== otpHash) {
+      return { valid: false, message: "Incorrect OTP code. Please check your email and try again." };
+    }
+
+    return { valid: true, email, phone };
+  } catch (err) {
+    return { valid: false, message: "Malformed or invalid registration token." };
+  }
+};
+
+// @desc    Pre-Registration Step 1: Send 6-Digit Email OTP
+// @route   POST /api/auth/send-registration-otp
+// @access  Public
+exports.sendRegistrationOtp = async (req, res) => {
+  try {
+    const { email, phone } = req.body;
+
+    if (!email || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Email address and phone number are required for OTP verification.",
+      });
+    }
+
+    const targetEmail = email.trim().toLowerCase();
+    const targetPhone = phone.trim();
+
+    // Check if user already exists in MongoDB
+    const existingUser = await User.findOne({
+      $or: [{ phone: targetPhone }, { email: targetEmail }],
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: "Conflict: An account with this phone number or email already exists in the system.",
+      });
+    }
+
+    // Generate 6-digit OTP
+    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const tempRegistrationToken = generateRegistrationToken(targetEmail, targetPhone, generatedOtp);
+
+    console.log(`\n=========================================`);
+    console.log(`[DEV PRE-REGISTRATION OTP] Code for ${targetEmail}: [ ${generatedOtp} ]`);
+    console.log(`=========================================\n`);
+
+    // Send email
+    await sendEmail({
+      to: targetEmail,
+      subject: "Protocol Zero - Account Registration Verification Code",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 8px; background-color: #ffffff;">
+          <h2 style="color: #6200ee; text-align: center;">Protocol Zero</h2>
+          <h3 style="color: #333333; text-align: center; margin-top: 0;">Email Registration Verification</h3>
+          <p>Hello,</p>
+          <p>Thank you for registering with Protocol Zero. Please use the following 6-digit verification code to complete your registration:</p>
+          <div style="font-size: 28px; font-weight: bold; text-align: center; letter-spacing: 6px; padding: 15px; background-color: #f3e8ff; border: 1px dashed #6200ee; border-radius: 6px; margin: 20px 0; color: #6200ee;">
+            ${generatedOtp}
+          </div>
+          <p>This verification code is valid for 10 minutes.</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;">
+          <p style="font-size: 11px; color: #999; text-align: center;">This is an automated system notification.</p>
+        </div>
+      `,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `A 6-digit OTP verification code has been sent to ${targetEmail}.`,
+      tempRegistrationToken,
+      email: targetEmail,
+    });
+  } catch (error) {
+    console.error("[ERROR] Send Registration OTP Failure:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error during pre-registration OTP dispatch.",
+    });
+  }
+};
+
+// @desc    Pre-Registration Step 2: Verify OTP & Finalize MongoDB User Account
+// @route   POST /api/auth/verify-registration-otp
+// @access  Public (Optionally includes Bearer Token)
+exports.verifyRegistrationOtp = async (req, res) => {
+  try {
+    const { tempRegistrationToken, otp, registrationPayload } = req.body;
+
+    if (!tempRegistrationToken || !otp || !registrationPayload) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required registration verification parameters (tempRegistrationToken, otp, registrationPayload).",
+      });
+    }
+
+    const verifyResult = verifyRegistrationTokenHelper(tempRegistrationToken, otp);
+    if (!verifyResult.valid) {
+      return res.status(401).json({
+        success: false,
+        message: verifyResult.message,
+      });
+    }
+
+    const {
+      name,
+      phone,
+      email,
+      accountType = "User",
+      nid,
+      face,
+      avatar,
+      officeName,
+      officeAddress,
+      role,
+      inventory,
+      homeAddress,
+      homeAddressGps,
+      currentAddress,
+      currentAddressGps,
+      gps
+    } = registrationPayload;
+
+    const targetEmail = (email || verifyResult.email || "").toLowerCase();
+    const targetPhone = phone || verifyResult.phone;
+
+    // Check duplicate in DB before creating
+    let existingUser = await User.findOne({
+      $or: [{ phone: targetPhone }, { email: targetEmail }],
+    });
+
+    if (existingUser) {
+      return res.status(200).json({
+        success: true,
+        message: "Account already registered and verified.",
+        data: existingUser,
+      });
+    }
+
+    // Determine verification status
+    const isVetted = ["Reporter", "ResponseTeam"].includes(accountType);
+    const verificationStatus = isVetted ? "pending" : "verified";
+
+    const userData = {
+      name,
+      phone: targetPhone,
+      email: targetEmail,
+      accountType,
+      verificationStatus,
+      score: 0,
+    };
+
+    if (nid) userData.nid = nid;
+    if (face) userData.face = face;
+    if (avatar) userData.avatar = avatar;
+    if (officeName) userData.officeName = officeName;
+    if (officeAddress) userData.officeAddress = officeAddress;
+    if (role) userData.role = role;
+    if (Array.isArray(inventory)) userData.inventory = inventory;
+    if (homeAddress) userData.homeAddress = homeAddress;
+    if (homeAddressGps) userData.homeAddressGps = homeAddressGps;
+    if (currentAddress) userData.currentAddress = currentAddress;
+    if (currentAddressGps) userData.currentAddressGps = currentAddressGps;
+    if (gps) userData.gps = gps;
+
+    // Optional Firebase Token resolution
+    const authHeader = req.headers?.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const idToken = authHeader.split(" ")[1];
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        if (decodedToken?.uid) {
+          userData.firebaseUid = decodedToken.uid;
+        }
+      } catch (fbErr) {
+        console.warn("Optional Firebase token decoding failed in verifyRegistrationOtp:", fbErr.message);
+      }
+    }
+
+    const newUser = await User.create(userData);
+
+    // If vetted account, send admin notification
+    if (isVetted) {
+      try {
+        const adminUsers = await User.find({ accountType: { $in: ["Admin", "SuperAdmin"] } });
+        const notifDocs = adminUsers.map(a => ({
+          recipientId: a._id,
+          referenceId: newUser._id,
+          referenceModel: "User",
+          type: "vetted_application",
+          message: `New ${newUser.accountType} application pending verification: ${newUser.name} (${newUser.email}).`,
+        }));
+        if (notifDocs.length > 0) {
+          await Notification.insertMany(notifDocs);
+        }
+      } catch (nErr) {
+        console.warn("Failed to dispatch admin notification for vetted app:", nErr.message);
+      }
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `${newUser.accountType} account verified & registered successfully!`,
+      data: newUser,
+    });
+  } catch (error) {
+    console.error("[ERROR] Verify Registration OTP Failure:", error);
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Conflict: An account with this phone number or email already exists in the system.",
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error during registration OTP verification.",
+    });
+  }
+};
+

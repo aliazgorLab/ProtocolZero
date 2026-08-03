@@ -95,7 +95,7 @@ const AdminLogin = () => {
               {error && (
                 <div className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-bold px-4 py-3 rounded-xl flex items-center gap-2">
                   <span className="material-symbols-outlined text-base">error</span>
-                  {error}
+                  <span>{typeof error === 'string' ? error : error?.message || 'Admin authentication error occurred'}</span>
                 </div>
               )}
 
@@ -158,7 +158,7 @@ const AdminLogin = () => {
               {error && (
                 <div className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-bold px-4 py-3 rounded-xl flex items-center gap-2">
                   <span className="material-symbols-outlined text-base">error</span>
-                  {error}
+                  <span>{typeof error === 'string' ? error : error?.message || 'Admin authentication error occurred'}</span>
                 </div>
               )}
 

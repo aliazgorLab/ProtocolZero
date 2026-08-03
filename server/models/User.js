@@ -65,6 +65,7 @@ const userSchema = new mongoose.Schema(
       },
     },
     face: { type: String, default: null }, // Link to verified photo ID/image
+    avatar: { type: String, default: null }, // Public User Profile Picture / Avatar URL
 
     // Office details (Applicable to ResponseTeam and Reporter)
     officeName: { type: String, default: null },

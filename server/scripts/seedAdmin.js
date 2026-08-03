@@ -4,16 +4,12 @@ require("dotenv").config();
 const User = require("../models/User");
 
 const run = async () => {
-  const email = process.env.SEED_ADMIN_EMAIL;
-  const phone = process.env.SEED_ADMIN_PHONE;
-  const name = process.env.SEED_ADMIN_NAME || "Super Admin";
+  const email = process.env.SEED_ADMIN_EMAIL || "protocolzero@admin.com";
+  const phone = process.env.SEED_ADMIN_PHONE || "+8801700000000";
+  const name = process.env.SEED_ADMIN_NAME || "Protocol SuperAdmin";
 
   if (!process.env.MONGO_URI) {
     throw new Error("MONGO_URI is required.");
-  }
-
-  if (!email || !phone) {
-    throw new Error("SEED_ADMIN_EMAIL and SEED_ADMIN_PHONE are required.");
   }
 
   await mongoose.connect(process.env.MONGO_URI);

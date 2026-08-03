@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
-import { logout, updateUser, updateLiveLocation } from '../features/auth/authSlice';
+import { updateUser, updateLiveLocation } from '../features/auth/authSlice';
 import axiosInstance from '../api/axiosInstance';
 import CreateReportBox from '../components/CreateReportBox';
 import { useToast } from '../context/ToastContext';
@@ -19,6 +19,55 @@ const UserProfile = () => {
   const [savingAddresses, setSavingAddresses] = useState(false);
   const [savingInventory, setSavingInventory] = useState(false);
   const [gpsActive, setGpsActive] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const handleAvatarChange = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setUploadingAvatar(true);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDimension = 500;
+          if (width > height) {
+            if (width > maxDimension) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            }
+          } else {
+            if (height > maxDimension) {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+
+          axiosInstance.patch('/users/profile', { avatar: compressedBase64 })
+            .then(res => {
+              if (res.data?.success && res.data?.data) {
+                dispatch(updateUser({ avatar: res.data.data.avatar || compressedBase64 }));
+                showToast("Profile picture updated successfully!", "success");
+              }
+            })
+            .catch(err => {
+              console.error("Avatar upload failed:", err);
+              showToast("Failed to upload profile picture.", "error");
+            })
+            .finally(() => setUploadingAvatar(false));
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Address & Map State
   const [homeAddress, setHomeAddress] = useState(currentUser?.homeAddress || '');
@@ -262,29 +311,55 @@ const UserProfile = () => {
   return (
     <div className="bg-surface-container-lowest min-h-screen pb-24 text-on-surface">
       
-      {/* Cover Photo Header */}
-      <div className="h-44 md:h-60 w-full bg-surface-container-high relative overflow-hidden">
-        <div className="absolute inset-0 opacity-30 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary via-surface to-background"></div>
+      {/* Facebook-style Cover Photo Banner */}
+      <div className="h-48 md:h-64 w-full bg-surface-container-high relative overflow-hidden">
+        <div className="absolute inset-0 opacity-25 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary via-surface to-background"></div>
       </div>
 
-      {/* Main Container */}
+      {/* Profile Header Container */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 relative pb-6 border-b border-outline-variant/30">
         
-        {/* Profile Picture & Identity Card */}
+        {/* Profile Picture & Main Identity Row */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-16 sm:-mt-20 mb-4 relative z-10">
+          
           <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
+            {/* Avatar Circle with Upload Overlay */}
             <div className="relative group w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-surface-container-lowest bg-surface-container-low overflow-hidden shadow-xl shrink-0">
-              <div className="w-full h-full bg-primary-container flex items-center justify-center">
-                <span className="material-symbols-outlined text-[64px] text-primary">person</span>
-              </div>
+              {currentUser?.avatar || currentUser?.face ? (
+                <img
+                  src={currentUser.avatar || currentUser.face}
+                  alt={currentUser.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-primary/10 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[64px] text-primary">person</span>
+                </div>
+              )}
+
+              {/* Upload Hover Overlay */}
+              <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white cursor-pointer transition-opacity duration-200">
+                <span className="material-symbols-outlined text-3xl">photo_camera</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider mt-1 text-center px-2">
+                  {uploadingAvatar ? 'Uploading...' : 'Upload Photo'}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  disabled={uploadingAvatar}
+                  className="hidden"
+                />
+              </label>
             </div>
 
+            {/* Name & Account Type */}
             <div className="pb-2 space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-3xl font-black text-on-surface">{currentUser?.name || 'Protocol Zero User'}</h1>
+                <h1 className="text-3xl font-black text-on-surface">{currentUser?.name || 'Protocol User'}</h1>
                 
-                {/* Verification Status Chip */}
-                <span className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest border ${
+                {/* Verification Chip */}
+                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${
                   verificationStatus === 'verified'
                     ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
                     : verificationStatus === 'pending'
@@ -301,6 +376,7 @@ const UserProfile = () => {
             </div>
           </div>
 
+          {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-2 pb-2">
             <button 
               onClick={handleToggleGPS}
@@ -311,33 +387,37 @@ const UserProfile = () => {
               }`}
             >
               <span className="material-symbols-outlined text-lg">{gpsActive ? 'my_location' : 'location_disabled'}</span>
-              {gpsActive ? 'GPS Active (Sync)' : 'Sync Live GPS'}
+              {gpsActive ? 'GPS Synchronized' : 'Sync Live GPS'}
             </button>
           </div>
         </div>
 
-        {/* Low-Trust Warning Banner */}
+        {/* Low-Trust Score Warning Alert */}
         {isFlagged && (
           <div className="mt-4 rounded-2xl bg-rose-950 text-rose-100 p-4 border border-rose-800 flex items-center gap-3 shadow-lg">
             <span className="material-symbols-outlined text-rose-400 text-3xl shrink-0">warning</span>
             <div>
               <p className="text-xs font-black uppercase tracking-wider text-rose-400">Account Reliability Flagged ({userScore})</p>
               <p className="text-xs text-rose-200 mt-0.5 font-medium leading-relaxed">
-                Your reliability score has dropped below -40 due to unverified or false incident reports. Your account is flagged for moderator audit.
+                Your reliability score has dropped below -40. Your account is flagged for administrator review.
               </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Grid Content Layout */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6">
+      {/* Main Content Layout (2-Column Grid) */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 flex flex-col md:flex-row gap-6">
         
-        <div className="space-y-6">
+        {/* Left Column (Create Report Box, Address Map, Inventory & Activity) */}
+        <div className="flex-1 space-y-6">
           
+          {/* Create Report Action Box (Opens /reports/create when clicked) */}
+          <CreateReportBox />
+
           {/* Saved Addresses Card (Interactive Google Map) */}
           <article className="bg-surface border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
-            <div className="flex items-center justify-between gap-4 mb-4 pb-3 border-b border-outline-variant/20">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-3 border-b border-outline-variant/20">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
                   <span className="material-symbols-outlined text-2xl">home_pin</span>
@@ -348,11 +428,11 @@ const UserProfile = () => {
                 </div>
               </div>
 
-              <div className="flex gap-1 bg-surface-container p-1 rounded-xl">
+              <div className="flex gap-1 bg-surface-container p-1 rounded-xl shrink-0">
                 <button
                   type="button"
                   onClick={() => setActiveAddressTab('home')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer ${
                     activeAddressTab === 'home' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
                   }`}
                 >
@@ -361,7 +441,7 @@ const UserProfile = () => {
                 <button
                   type="button"
                   onClick={() => setActiveAddressTab('current')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer ${
                     activeAddressTab === 'current' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
                   }`}
                 >
@@ -383,7 +463,7 @@ const UserProfile = () => {
                     placeholder="Enter permanent home address..."
                     className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-3 text-xs font-medium text-on-surface outline-none focus:border-primary"
                   />
-                  <span className="text-[10px] text-on-surface-variant mt-1 block">
+                  <span className="text-[10px] text-on-surface-variant mt-1 block font-mono">
                     Coordinates: [{homeCoords.lng.toFixed(5)}, {homeCoords.lat.toFixed(5)}]
                   </span>
                 </div>
@@ -399,7 +479,7 @@ const UserProfile = () => {
                     placeholder="Enter current location address..."
                     className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-3 text-xs font-medium text-on-surface outline-none focus:border-primary"
                   />
-                  <span className="text-[10px] text-on-surface-variant mt-1 block">
+                  <span className="text-[10px] text-on-surface-variant mt-1 block font-mono">
                     Coordinates: [{currentCoords.lng.toFixed(5)}, {currentCoords.lat.toFixed(5)}]
                   </span>
                 </div>
@@ -448,7 +528,7 @@ const UserProfile = () => {
             </form>
           </article>
 
-          {/* Volunteer & Response Team Inventory Card */}
+          {/* Volunteer & Response Team Field Inventory Card */}
           {isVolunteerOrResponse && (
             <article className="bg-surface border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
               <div className="flex items-center justify-between gap-4 mb-4 pb-3 border-b border-outline-variant/20">
@@ -465,7 +545,7 @@ const UserProfile = () => {
                 <button
                   type="button"
                   onClick={addInventoryItem}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider transition active:scale-95 cursor-pointer flex items-center gap-1"
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider transition active:scale-95 cursor-pointer flex items-center gap-1 shadow-sm"
                 >
                   <span className="material-symbols-outlined text-sm">add</span>
                   Add Item
@@ -533,7 +613,7 @@ const UserProfile = () => {
             </article>
           )}
 
-          {/* User Submitted Incidents */}
+          {/* User Submitted Incident Activity */}
           <article className="bg-surface border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
             <h3 className="text-lg font-bold text-on-surface mb-4">My Submitted Incident Activity</h3>
             {loadingUserReports ? (
@@ -566,9 +646,34 @@ const UserProfile = () => {
           </article>
         </div>
 
-        {/* Right Sidebar (Role Toggle & Security) */}
-        <aside className="space-y-6">
+        {/* Right Column (Account Telemetry, Volunteer Mode & Security) */}
+        <aside className="w-full md:w-[350px] shrink-0 space-y-6">
           
+          {/* Account Telemetry Card */}
+          <article className="bg-surface border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-on-surface mb-4">Account Telemetry</h3>
+            <div className="space-y-4 text-sm text-on-surface">
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-container-lowest border border-outline-variant/20">
+                <span className="text-xs text-on-surface-variant font-medium">Role</span>
+                <span className="font-bold text-on-surface">{accountType}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-container-lowest border border-outline-variant/20">
+                <span className="text-xs text-on-surface-variant font-medium">Status</span>
+                <span className="font-bold text-primary capitalize">{verificationStatus}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-container-lowest border border-outline-variant/20">
+                <span className="text-xs text-on-surface-variant font-medium">Live GPS</span>
+                <span className="font-bold text-on-surface">{gpsActive ? 'Synchronized' : 'Inactive'}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-container-lowest border border-outline-variant/20">
+                <span className="text-xs text-on-surface-variant font-medium">Reliability Score</span>
+                <span className={`font-black ${userScore < 0 ? 'text-alert-red' : 'text-emerald-600'}`}>
+                  {userScore > 0 ? `+${userScore}` : userScore}
+                </span>
+              </div>
+            </div>
+          </article>
+
           {/* Volunteer Mode Toggle Card */}
           {isCitizenOrVolunteer && (
             <article className="bg-surface border border-primary/30 rounded-3xl p-6 shadow-sm">
@@ -602,7 +707,7 @@ const UserProfile = () => {
             </article>
           )}
 
-          {/* Security & 2FA */}
+          {/* Security & 2FA Card */}
           <article className="bg-surface border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
             <h3 className="text-base font-bold text-on-surface mb-3">Security & 2FA</h3>
             <div className="flex items-center justify-between p-3 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest">

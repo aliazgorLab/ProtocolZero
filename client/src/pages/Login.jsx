@@ -115,7 +115,7 @@ const Login = () => {
               {error && (
                 <div className="bg-error-container text-on-error-container text-sm font-medium px-4 py-3 rounded-lg flex items-center gap-2">
                   <span className="material-symbols-outlined text-[18px]">error</span>
-                  {error}
+                  <span>{typeof error === 'string' ? error : error?.message || 'Authentication error occurred'}</span>
                 </div>
               )}
 
@@ -200,7 +200,7 @@ const Login = () => {
               {error && (
                 <div className="bg-error-container text-on-error-container text-sm font-medium px-4 py-3 rounded-lg flex items-center gap-2">
                   <span className="material-symbols-outlined text-[18px]">error</span>
-                  {error}
+                  <span>{typeof error === 'string' ? error : error?.message || 'Authentication error occurred'}</span>
                 </div>
               )}
 

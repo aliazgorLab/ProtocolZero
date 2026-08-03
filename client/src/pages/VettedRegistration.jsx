@@ -133,11 +133,14 @@ const VettedRegistration = () => {
     };
 
     try {
-      await dispatch(registerVettedUser(payload)).unwrap();
-      setSubmittedSuccess(true);
-      showToast("Application submitted successfully for review!", "success");
+      const result = await dispatch(sendRegistrationOtp({ email: payload.email, phone: payload.phone })).unwrap();
+      if (result?.tempRegistrationToken) {
+        dispatch(setRegistrationState({ token: result.tempRegistrationToken, payload, email: payload.email }));
+        showToast("Verification code dispatched to your email!", "info");
+        navigate('/otp-verification?mode=registration');
+      }
     } catch (err) {
-      showToast(err || "Registration failed.", "error");
+      showToast(err || "Failed to dispatch registration verification OTP.", "error");
     }
   };
 
@@ -416,7 +419,7 @@ const VettedRegistration = () => {
             {error && (
               <div className="p-4 rounded-xl bg-error-container text-on-error-container text-sm font-semibold flex items-center gap-3">
                 <span className="material-symbols-outlined">error</span>
-                {error}
+                <span>{typeof error === 'string' ? error : error?.message || 'Registration error occurred'}</span>
               </div>
             )}
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { registerUser, clearError } from '../features/auth/authSlice';
+import { registerUser, sendRegistrationOtp, setRegistrationState, clearError } from '../features/auth/authSlice';
 import { ROLES } from '../constants/roles';
 
 const SignUp = () => {
@@ -13,12 +13,48 @@ const SignUp = () => {
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
   const [homeAddress, setHomeAddress] = useState('');
+  const [avatarBase64, setAvatarBase64] = useState('');
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { isLoading, isAuthenticated, error } = useSelector((state) => state.auth);
 
   const togglePassword = () => setShowPassword(!showPassword);
+
+  const handleAvatarFileChange = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDimension = 500;
+          if (width > height) {
+            if (width > maxDimension) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            }
+          } else {
+            if (height > maxDimension) {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.6);
+          setAvatarBase64(compressed);
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   useEffect(() => {
     dispatch(clearError());
@@ -30,13 +66,12 @@ const SignUp = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name || !phone || !email || !homeAddress) return;
 
     const fullPhone = `${countryCode}${phone.replace(/^0+/, '')}`;
-
-    dispatch(registerUser({
+    const payload = {
       name,
       phone: fullPhone,
       email,
@@ -44,7 +79,18 @@ const SignUp = () => {
       accountType,
       currentAddress: homeAddress,
       homeAddress,
-    }));
+      avatar: avatarBase64 || null,
+    };
+
+    try {
+      const result = await dispatch(sendRegistrationOtp({ email, phone: fullPhone })).unwrap();
+      if (result?.tempRegistrationToken) {
+        dispatch(setRegistrationState({ token: result.tempRegistrationToken, payload, email }));
+        navigate('/otp-verification?mode=registration');
+      }
+    } catch (err) {
+      console.error("Failed to send registration OTP:", err);
+    }
   };
 
   return (
@@ -70,6 +116,22 @@ const SignUp = () => {
           <div className="bg-white rounded-xl shadow-xl p-4 md:p-8 border border-outline-variant/30">
             <form className="space-y-4" id="signup-form" onSubmit={handleSubmit}>
               
+              {/* Optional Profile Picture Upload */}
+              <div className="flex flex-col items-center justify-center space-y-2 pb-2 border-b border-outline-variant/30">
+                <div className="relative w-20 h-20 rounded-full bg-surface-container-low border-2 border-primary/30 flex items-center justify-center overflow-hidden shadow-inner group">
+                  {avatarBase64 ? (
+                    <img src={avatarBase64} alt="Avatar preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="material-symbols-outlined text-4xl text-outline">person_add</span>
+                  )}
+                  <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-bold cursor-pointer transition-opacity">
+                    <span>{avatarBase64 ? 'Change' : 'Upload'}</span>
+                    <input type="file" accept="image/*" onChange={handleAvatarFileChange} className="hidden" />
+                  </label>
+                </div>
+                <span className="text-[11px] font-semibold text-on-surface-variant">Profile Picture (Optional)</span>
+              </div>
+
               {/* Full Name */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-outline uppercase tracking-wider" htmlFor="full_name">Full Name</label>
@@ -197,7 +259,7 @@ const SignUp = () => {
               {error && (
                 <div className="bg-error-container text-on-error-container text-sm font-medium px-4 py-3 rounded-lg flex items-center gap-2">
                   <span className="material-symbols-outlined text-[18px]">error</span>
-                  {error}
+                  <span>{typeof error === 'string' ? error : error?.message || 'Registration error occurred'}</span>
                 </div>
               )}
 

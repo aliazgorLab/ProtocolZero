@@ -6,6 +6,7 @@ import { updateLiveLocation } from '../features/auth/authSlice';
 import { useToast } from '../context/ToastContext';
 import axiosInstance from '../api/axiosInstance';
 import DisasterImpactCircle from '../components/DisasterImpactCircle';
+import CreateReportBox from '../components/CreateReportBox';
 import { getDisasterConfig, isValidCoordinate } from '../utils/disasterColors';
 
 const Home = () => {
@@ -265,6 +266,9 @@ const Home = () => {
             SYNC GPS
           </button>
         </div>
+
+        {/* Create Report Action Box */}
+        <CreateReportBox />
 
         {/* Feed Header */}
         <div className="flex items-center justify-between mt-2">
