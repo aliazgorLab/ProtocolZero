@@ -26,7 +26,6 @@ const Onboarding = () => {
     return () => document.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  // Simple enter animation
   useEffect(() => {
     const elements = document.querySelectorAll('.animate-enter');
     elements.forEach((el, index) => {
@@ -65,11 +64,9 @@ const Onboarding = () => {
         <div className={`flex flex-col items-center text-center max-w-lg transition-transform duration-1000 ease-in-out ${showPortals ? 'scale-100 translate-y-0' : 'scale-110 md:scale-125 translate-y-24 md:translate-y-32'}`}>
           <div className="relative mb-6 group animate-enter">
             <div className="absolute -inset-4 bg-primary/10 rounded-full blur-xl group-hover:bg-primary/20 transition-all duration-700"></div>
-            <img 
-              alt="Protocol Zero Logo" 
-              className="relative w-32 h-32 md:w-40 md:h-40 object-contain drop-shadow-sm" 
-              src="https://lh3.googleusercontent.com/aida/AP1WRLsFZd9m7ptmonppw50NCzXgTHE7r4IlGTGf-aEwssFOBTCQ4brZbreirH7yu4jAUpXWz4wiKxrlFb423XxRmKx2v7xK3ey91l2SX_pLHS_qX-HIxbv6wptTTSN_wzKNgLqzylk4bzjlvYjwOel2IQvE0lrZuQplK4AZN2CfQ4ok8LGIHXIIAzEqqRdV1BbQrXMAIuT9hCXs-BRgHr6cHviUH9Z7SsYJv9W-bMNPnJ2adFtfj-6ciQSIans" 
-            />
+            <div className="w-28 h-28 md:w-36 md:h-36 rounded-3xl bg-primary-container flex items-center justify-center border border-primary/20 shadow-xl">
+              <span className="material-symbols-outlined text-primary text-[64px] md:text-[80px]">shield_with_heart</span>
+            </div>
           </div>
           
           <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-primary mb-2 animate-enter">
@@ -80,7 +77,7 @@ const Onboarding = () => {
           </p>
           
           <p className="text-base text-on-surface-variant mb-8 px-4 max-w-sm animate-enter">
-            Advanced civilian coordination during high-stakes events. Direct access to verified incident reporting.
+            Advanced civilian & emergency coordination network. Direct access to verified incident reporting.
           </p>
         </div>
 
