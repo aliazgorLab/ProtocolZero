@@ -14,10 +14,14 @@ const Home = () => {
   const { showToast } = useToast();
   const { user, isAuthenticated } = useSelector((state) => state.auth);
   
-  const [activeCard, setActiveCard] = useState(null);
   const [zoomLevel, setZoomLevel] = useState(14);
   const [reports, setReports] = useState([]);
   const [loadingReports, setLoadingReports] = useState(true);
+
+  // Filter & Sort States
+  const [typeFilter, setTypeFilter] = useState('all'); // 'all' | 'major' | 'minor'
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('recent'); // 'recent' | 'score'
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -52,10 +56,49 @@ const Home = () => {
     fetchReports();
   }, []);
 
-  // Filter out reports with invalid/missing coordinates
+  // Extract available categories
+  const availableCategories = useMemo(() => {
+    const defaultCats = ['Fire', 'Medical', 'Flood', 'Traffic', 'Infrastructure', 'General Hazard'];
+    const reportCats = reports.map(r => r.category).filter(Boolean);
+    return Array.from(new Set([...defaultCats, ...reportCats]));
+  }, [reports]);
+
+  // Valid reports for map visualization
   const validReports = useMemo(() => {
     return reports.filter((r) => isValidCoordinate(r.location));
   }, [reports]);
+
+  // Filtered and Sorted reports for the Feed
+  const filteredReports = useMemo(() => {
+    let result = reports.filter((r) => isValidCoordinate(r.location));
+
+    // Filter by type/severity
+    if (typeFilter !== 'all') {
+      result = result.filter((r) => r.type === typeFilter);
+    }
+
+    // Filter by category
+    if (categoryFilter !== 'all') {
+      result = result.filter((r) => (r.category || '').toLowerCase() === categoryFilter.toLowerCase());
+    }
+
+    // Sort reports
+    result = [...result].sort((a, b) => {
+      if (sortBy === 'recent') {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      }
+      if (sortBy === 'score') {
+        const scoreA = (a.vote?.upvote || 0) - (a.vote?.downvote || 0);
+        const scoreB = (b.vote?.upvote || 0) - (b.vote?.downvote || 0);
+        return scoreB - scoreA;
+      }
+      return 0;
+    });
+
+    return result;
+  }, [reports, typeFilter, categoryFilter, sortBy]);
 
   const handleRecenter = () => {
     if (!navigator.geolocation) {
@@ -101,6 +144,12 @@ const Home = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const resetFilters = () => {
+    setTypeFilter('all');
+    setCategoryFilter('all');
+    setSortBy('recent');
+  };
+
   return (
     <main className="pt-14 pb-24 min-h-screen">
       {/* Interactive Map Section (Sticky Top) */}
@@ -141,7 +190,6 @@ const Home = () => {
               {/* Valid Incident Markers & Impact Circles */}
               {validReports.map((report) => {
                 const [lng, lat] = report.location.coordinates;
-                const config = getDisasterConfig(report.category);
                 return (
                   <React.Fragment key={report._id || report.postId}>
                     <Marker
@@ -177,13 +225,13 @@ const Home = () => {
           <div className="absolute top-4 right-4 flex flex-col gap-2 pointer-events-auto">
             <button 
               onClick={handleRecenter}
-              className="bg-surface/90 backdrop-blur shadow-lg p-2 rounded-lg text-on-surface hover:bg-surface-container-high transition-colors active:scale-95"
+              className="bg-surface/90 backdrop-blur shadow-lg p-2 rounded-lg text-on-surface hover:bg-surface-container-high transition-colors active:scale-95 cursor-pointer"
             >
               <span className="material-symbols-outlined">my_location</span>
             </button>
             <button 
               onClick={() => navigate('/map')}
-              className="bg-surface/90 backdrop-blur shadow-lg p-2 rounded-lg text-on-surface hover:bg-surface-container-high transition-colors active:scale-95"
+              className="bg-surface/90 backdrop-blur shadow-lg p-2 rounded-lg text-on-surface hover:bg-surface-container-high transition-colors active:scale-95 cursor-pointer"
               title="Open Full Map"
             >
               <span className="material-symbols-outlined">map</span>
@@ -211,7 +259,7 @@ const Home = () => {
           </div>
           <button 
             onClick={handleRecenter}
-            className="bg-primary text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-primary/90 active:scale-95 transition-all shadow-md shrink-0"
+            className="bg-primary text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-primary/90 active:scale-95 transition-all shadow-md shrink-0 cursor-pointer"
           >
             <span className="material-symbols-outlined text-[16px]">my_location</span>
             SYNC GPS
@@ -220,12 +268,102 @@ const Home = () => {
 
         {/* Feed Header */}
         <div className="flex items-center justify-between mt-2">
-          <h2 className="text-xl font-bold text-on-surface">Live Intelligence Feed</h2>
+          <div>
+            <h2 className="text-xl font-bold text-on-surface">Live Intelligence Feed</h2>
+            <p className="text-xs text-on-surface-variant">Showing {filteredReports.length} plottable incidents</p>
+          </div>
           <Link to="/map" className="flex items-center gap-1 text-primary text-xs font-bold uppercase tracking-wider bg-primary-fixed px-3 py-1 rounded-full hover:bg-primary/20 transition-colors">
             <span className="material-symbols-outlined text-[16px]">map</span>
             FULL MAP
           </Link>
         </div>
+
+        {/* Professional Tactical Filter Control Panel */}
+        <section className="bg-surface-container rounded-2xl p-4 border border-outline-variant/30 shadow-sm space-y-3">
+          <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary text-sm">tune</span>
+              <span className="text-xs font-bold text-on-surface uppercase tracking-wider">Feed Filters & Controls</span>
+            </div>
+            {(typeFilter !== 'all' || categoryFilter !== 'all' || sortBy !== 'recent') && (
+              <button 
+                onClick={resetFilters}
+                className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[14px]">restart_alt</span>
+                Reset Filters
+              </button>
+            )}
+          </div>
+
+          {/* Severity Chips */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider shrink-0 mr-1">Severity:</span>
+            <button
+              onClick={() => setTypeFilter('all')}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors shrink-0 cursor-pointer ${
+                typeFilter === 'all' 
+                  ? 'bg-primary text-white shadow-sm' 
+                  : 'bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-high'
+              }`}
+            >
+              All Types
+            </button>
+            <button
+              onClick={() => setTypeFilter('major')}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors shrink-0 flex items-center gap-1 cursor-pointer ${
+                typeFilter === 'major' 
+                  ? 'bg-alert-red text-white shadow-sm' 
+                  : 'bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-high'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-alert-red"></span>
+              Major Reports
+            </button>
+            <button
+              onClick={() => setTypeFilter('minor')}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors shrink-0 flex items-center gap-1 cursor-pointer ${
+                typeFilter === 'minor' 
+                  ? 'bg-primary-container text-on-primary-container border border-primary/30' 
+                  : 'bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-high'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-primary"></span>
+              Minor Reports
+            </button>
+          </div>
+
+          {/* Category & Sort Dropdowns Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            {/* Category Selector */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Category</label>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="w-full rounded-xl border border-outline-variant/30 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface outline-none focus:border-primary cursor-pointer"
+              >
+                <option value="all">All Categories</option>
+                {availableCategories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Sort Selector */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Sort Feed By</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="w-full rounded-xl border border-outline-variant/30 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface outline-none focus:border-primary cursor-pointer"
+              >
+                <option value="recent">Most Recent (Latest First)</option>
+                <option value="score">Highest Upvotes / Score</option>
+              </select>
+            </div>
+          </div>
+        </section>
 
         {/* Dynamic Incident Cards */}
         {loadingReports ? (
@@ -233,14 +371,20 @@ const Home = () => {
             <span className="material-symbols-outlined animate-spin text-[32px] mb-2">progress_activity</span>
             <p>Scanning intelligence network...</p>
           </div>
-        ) : validReports.length === 0 ? (
+        ) : filteredReports.length === 0 ? (
           <div className="text-center py-12 bg-surface-container rounded-2xl border border-outline-variant/30">
-            <span className="material-symbols-outlined text-outline text-[48px] mb-2">check_circle</span>
-            <h3 className="font-bold text-on-surface">No Active Incidents Plotted</h3>
-            <p className="text-xs text-on-surface-variant mt-1">Your area is clean. Click "Report Incident" to submit field updates.</p>
+            <span className="material-symbols-outlined text-outline text-[48px] mb-2">filter_alt_off</span>
+            <h3 className="font-bold text-on-surface">No Incidents Match Selected Filters</h3>
+            <p className="text-xs text-on-surface-variant mt-1">Try resetting your filter options to view available field reports.</p>
+            <button 
+              onClick={resetFilters} 
+              className="mt-3 bg-primary text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-primary/90 transition"
+            >
+              Reset Filters
+            </button>
           </div>
         ) : (
-          validReports.map((report) => {
+          filteredReports.map((report) => {
             const config = getDisasterConfig(report.category);
             const isMajor = report.type === 'major';
 
@@ -296,7 +440,7 @@ const Home = () => {
                   </div>
                   <button 
                     onClick={() => navigate(`/reports/${report.postId || report._id}`)}
-                    className="bg-primary hover:bg-primary-container text-white px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider active:scale-95 transition-transform"
+                    className="bg-primary hover:bg-primary-container text-white px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider active:scale-95 transition-transform cursor-pointer"
                   >
                     VIEW REPORT
                   </button>

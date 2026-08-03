@@ -4,7 +4,6 @@ import Home from '../pages/Home';
 import Login from '../pages/Login';
 import Onboarding from '../pages/Onboarding';
 import OtpVerification from '../pages/OtpVerification';
-import SelectRole from '../pages/SelectRole';
 import SignUp from '../pages/SignUp';
 import ResponseTeamSignUp from '../pages/ResponseTeamSignUp';
 import ReporterSignUp from '../pages/ReporterSignUp';
@@ -30,7 +29,6 @@ const AppRoutes = () => {
       <Route path="/login/vetted" element={<VettedLogin />} />
       <Route path="/otp-verification" element={<OtpVerification />} />
       <Route path="/signup" element={<SignUp />} />
-      <Route path="/signup/select-role" element={<SelectRole />} />
       <Route path="/signup/vetted" element={<VettedRegistration />} />
       <Route path="/signup/reporter" element={<VettedRegistration />} />
       <Route path="/signup/response-team" element={<VettedRegistration />} />

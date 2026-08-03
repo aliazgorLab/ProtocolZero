@@ -1,12 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import SidebarMenu from '../components/SidebarMenu';
+import GlobalSearchModal from '../components/GlobalSearchModal';
 
 const DashboardLayout = () => {
   const navigate = useNavigate();
   const [isSosActive, setIsSosActive] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const location = useLocation();
+
+  // Keyboard shortcut Ctrl+K / Cmd+K listener
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleSosClick = () => {
     navigate('/sos');
@@ -26,7 +40,8 @@ const DashboardLayout = () => {
         <div className="flex items-center gap-4">
           <button 
             onClick={() => setIsSidebarOpen(true)}
-            className="material-symbols-outlined text-primary hover:bg-surface-variant/50 transition-colors p-2 rounded-full active:scale-95"
+            className="material-symbols-outlined text-primary hover:bg-surface-variant/50 transition-colors p-2 rounded-full active:scale-95 cursor-pointer"
+            title="Open Menu"
           >
             menu
           </button>
@@ -34,8 +49,20 @@ const DashboardLayout = () => {
             Protocol Zero
           </Link>
         </div>
+
+        {/* Top-Right Search Controls */}
         <div className="flex items-center gap-2">
-          <button className="material-symbols-outlined text-primary hover:bg-surface-variant/50 transition-colors p-2 rounded-full active:scale-95">search</button>
+          <button 
+            onClick={() => setIsSearchOpen(true)}
+            className="flex items-center gap-2 bg-surface-container-high/60 hover:bg-surface-container-high border border-outline-variant/30 text-on-surface-variant hover:text-on-surface px-3 py-1.5 rounded-full transition-all active:scale-95 cursor-pointer shadow-sm"
+            title="Search Protocol Zero (Ctrl+K)"
+          >
+            <span className="material-symbols-outlined text-primary text-xl">search</span>
+            <span className="text-xs font-bold hidden sm:inline-block">Search...</span>
+            <kbd className="hidden md:inline-block text-[9px] font-bold font-mono bg-surface-container-lowest px-1.5 py-0.5 rounded border border-outline-variant/30 text-outline">
+              ⌘K
+            </kbd>
+          </button>
         </div>
       </header>
 
@@ -63,7 +90,7 @@ const DashboardLayout = () => {
         <div className="relative -top-6">
           <button 
             onClick={handleSosClick}
-            className={`w-16 h-16 rounded-full flex flex-col items-center justify-center shadow-2xl z-50 border-4 border-white/20 active:scale-90 transition-all ${
+            className={`w-16 h-16 rounded-full flex flex-col items-center justify-center shadow-2xl z-50 border-4 border-white/20 active:scale-90 transition-all cursor-pointer ${
               isSosActive ? 'bg-black text-alert-red' : 'bg-alert-red text-white sos-pulse'
             }`}
           >
@@ -96,6 +123,9 @@ const DashboardLayout = () => {
       
       {/* Sidebar Menu Drawer */}
       <SidebarMenu isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+
+      {/* Global Command Search Overlay */}
+      <GlobalSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </div>
   );
 };
