@@ -22,8 +22,8 @@ exports.checkAndEscalateReport = async (reportId) => {
       return;
     }
 
-    const u = report.vote.upvote || 0;
-    const d = report.vote.downvote || 0;
+    const u = report.vote?.upvote || 0;
+    const d = report.vote?.downvote || 0;
 
     if (isSuspicious(u, d)) {
       // Set reliability to false
@@ -55,13 +55,10 @@ exports.checkAndEscalateReport = async (reportId) => {
       if (authorities.length > 0) {
         const notifications = authorities.map(auth => ({
           recipientId: auth._id,
+          referenceId: report._id,
+          referenceModel: "Report",
           type: "report_escalated",
-          title: "Suspicious Report Detected",
-          message: `Report ${report.postId} has been flagged as potentially false by community votes.`,
-          data: {
-            reportId: report._id,
-            postId: report.postId,
-          },
+          message: `Suspicious Report Detected: Report ${report.postId} has been flagged as potentially false by community votes.`,
         }));
 
         await Notification.insertMany(notifications);

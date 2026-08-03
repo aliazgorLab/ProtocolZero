@@ -3,9 +3,10 @@ const Report = require("../models/Report");
 const Notification = require("../models/Notification");
 
 // @desc    Recompute a user's reliability score and check for flagging
-// @param   {ObjectId} userId - The ID of the user whose score needs updating
+// @param   {ObjectId|string} userId - The ID of the user whose score needs updating
 exports.recomputeUserScore = async (userId) => {
   try {
+    if (!userId) return null;
     const user = await User.findById(userId);
 
     // Reporters, Response Teams, and Admins are never scored
@@ -33,7 +34,6 @@ exports.recomputeUserScore = async (userId) => {
     await user.save();
 
     // Flag account if score drops below threshold (-40)
-    // We only notify if they just crossed the threshold to avoid spamming
     if (newScore <= -40 && previousScore > -40) {
       await exports.notifyAdminsOfFlaggedAccount(user);
     }
@@ -52,13 +52,10 @@ exports.notifyAdminsOfFlaggedAccount = async (flaggedUser) => {
 
   const notifications = admins.map(admin => ({
     recipientId: admin._id,
+    referenceId: flaggedUser._id,
+    referenceModel: "User",
     type: "account_flagged",
-    title: "Account Flagged for Reliability",
-    message: `User ${flaggedUser.name} (${flaggedUser.accountType}) has a reliability score of ${flaggedUser.score} due to false reporting.`,
-    data: {
-      userId: flaggedUser._id,
-      score: flaggedUser.score,
-    },
+    message: `Account Flagged: User ${flaggedUser.name} (${flaggedUser.accountType}) has a reliability score of ${flaggedUser.score} due to false reporting.`,
   }));
 
   await Notification.insertMany(notifications);

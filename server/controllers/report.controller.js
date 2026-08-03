@@ -483,18 +483,37 @@ exports.registerVictim = async (req, res) => {
       });
     }
 
+    // Phase 4.3: Victim GPS Fallback Logic
+    let finalGps = null;
+    let actualGpsStatus = gpsStatus || "success";
+    let usedFallback = false;
+
+    if (actualGpsStatus === "failed") {
+      if (req.user.currentAddressGps) {
+        finalGps = req.user.currentAddressGps;
+        usedFallback = true;
+      } else if (req.user.homeAddressGps) {
+        finalGps = req.user.homeAddressGps;
+        usedFallback = true;
+      }
+      // If no fallback is available, we do NOT block the victim per user requirements.
+    } else {
+      if (gps && gps.type && gps.coordinates) {
+        finalGps = { type: gps.type, coordinates: gps.coordinates };
+      }
+    }
+
     await session.withTransaction(async () => {
+      const userUpdateFields = { victimReportID: report._id };
+      if (finalGps) {
+        userUpdateFields.gps = finalGps;
+      } else if (actualGpsStatus === "failed") {
+        userUpdateFields.gps = null;
+      }
+
       const userUpdate = await User.updateOne(
         { _id: userId, victimReportID: null },
-        {
-          $set: {
-            victimReportID: report._id,
-            gps: {
-              type: gps.type,
-              coordinates: gps.coordinates,
-            },
-          },
-        },
+        { $set: userUpdateFields },
         { session },
       );
 
@@ -504,7 +523,7 @@ exports.registerVictim = async (req, res) => {
 
       const reportUpdate = await Report.updateOne(
         { _id: report._id, status: "active", "victims.userId": { $ne: userId } },
-        { $addToSet: { victims: { userId: userId, gpsStatus: gpsStatus || "success", gpsFallback: gpsStatus === "failed" } } },
+        { $addToSet: { victims: { userId: userId, gpsStatus: actualGpsStatus, gpsFallback: usedFallback } } },
         { session },
       );
 
@@ -532,8 +551,8 @@ exports.registerVictim = async (req, res) => {
         downvote: updatedReport.vote?.downvote || 0,
       },
       victimId: req.user._id,
-      gpsStatus: gpsStatus || "success",
-      gpsFallback: gpsStatus === "failed",
+      gpsStatus: actualGpsStatus,
+      gpsFallback: usedFallback,
     });
 
     return res.status(200).json({
@@ -590,9 +609,11 @@ exports.updateReport = async (req, res) => {
       });
     }
 
-    const isAuthor = report.issuerId._id.toString() === req.user._id.toString();
+    const isAuthor = report.issuerId?._id
+      ? report.issuerId._id.toString() === req.user._id.toString()
+      : report.issuerId?.toString() === req.user._id.toString();
     const isAdmin = ["Admin", "SuperAdmin"].includes(req.user.accountType);
-    const isTargetAuthorReporter = report.issuerId.accountType === "Reporter";
+    const isTargetAuthorReporter = report.issuerId?.accountType === "Reporter";
 
     let canEdit = false;
 
@@ -688,9 +709,11 @@ exports.deleteReport = async (req, res) => {
       });
     }
 
-    const isAuthor = report.issuerId._id.toString() === req.user._id.toString();
+    const isAuthor = report.issuerId?._id
+      ? report.issuerId._id.toString() === req.user._id.toString()
+      : report.issuerId?.toString() === req.user._id.toString();
     const isAdmin = ["Admin", "SuperAdmin"].includes(req.user.accountType);
-    const isTargetAuthorReporter = report.issuerId.accountType === "Reporter";
+    const isTargetAuthorReporter = report.issuerId?.accountType === "Reporter";
 
     if (!isAdmin) {
       if (!isAuthor) {
@@ -760,9 +783,11 @@ exports.closeReport = async (req, res) => {
       });
     }
 
-    const isAuthor = report.issuerId._id.toString() === req.user._id.toString();
+    const isAuthor = report.issuerId?._id
+      ? report.issuerId._id.toString() === req.user._id.toString()
+      : report.issuerId?.toString() === req.user._id.toString();
     const isAdmin = ["Admin", "SuperAdmin"].includes(req.user.accountType);
-    const isTargetAuthorReporter = report.issuerId.accountType === "Reporter";
+    const isTargetAuthorReporter = report.issuerId?.accountType === "Reporter";
 
     let canClose = false;
 
@@ -793,7 +818,10 @@ exports.closeReport = async (req, res) => {
     await report.save();
 
     // Recompute reliability score for the author (Phase 4.1)
-    scoringService.recomputeUserScore(report.issuerId._id).catch(err => console.error(err));
+    const authorId = report.issuerId?._id || report.issuerId;
+    if (authorId) {
+      scoringService.recomputeUserScore(authorId).catch(err => console.error(err));
+    }
 
     return res.status(200).json({
       success: true,

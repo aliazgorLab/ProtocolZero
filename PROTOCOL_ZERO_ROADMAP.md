@@ -208,9 +208,9 @@ function isSuspicious(u, d) {
 
 **4.3 Victim GPS fallback**
 - `POST /api/reports/:id/victim` accepts `{ gps, gpsStatus }`. On `'failed'`, use the saved `currentAddress`/`homeAddress` coordinates and set `gpsFallback: true`.
-- If GPS failed **and** no saved address exists → 400 with a clear message. Never store a victim with no location.
+- If GPS failed **and** no saved address exists, do **not** block them from becoming a victim. The user's GPS is set to `null` and `gpsStatus` to `'failed'`, but the victim registration succeeds.
 - Attaches to an existing active report only — never creates one.
-- **Verify:** attach with GPS blocked → responder view shows the fallback warning; citizen view still sees only name and photo.
+- **Verify:** attach with GPS blocked and no address → registration succeeds. Responder view shows GPS failed; citizen view still sees only name and photo.
 
 ---
 
