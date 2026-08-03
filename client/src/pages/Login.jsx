@@ -225,10 +225,14 @@ const Login = () => {
               </div>
 
               {/* Secondary Link */}
-              <div className="text-center">
+              <div className="text-center space-y-2">
                 <p className="text-sm text-on-surface-variant">
                   Don't have an account?{' '}
                   <Link className="text-primary font-bold hover:underline" to="/signup">Sign Up</Link>
+                </p>
+                <p className="text-xs text-on-surface-variant opacity-80">
+                  System Moderator?{' '}
+                  <Link className="text-rose-600 font-bold hover:underline" to="/admin/login">Admin Command Gateway →</Link>
                 </p>
               </div>
             </form>

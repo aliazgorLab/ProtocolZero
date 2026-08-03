@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import { GoogleMap, useJsApiLoader, Marker, useGoogleMap } from '@react-google-maps/api';
 import { useToast } from '../context/ToastContext';
 import axiosInstance from '../api/axiosInstance';
+import { RESOURCE_TAXONOMY } from '../constants/resources';
 
 // Native Google Maps Circle wrapper to ensure 100% reliable lifecycle & deletion cleanup
 const ImpactCircle = ({ ia }) => {
@@ -168,6 +169,19 @@ const CreateReport = () => {
       }).filter(ia => !isNaN(ia.radius) && ia.coordinate.coordinates.every(c => !isNaN(c)));
     }
 
+    const parsedResourcesNeeded = reportType === 'major'
+      ? resources.map(r => {
+          const tax = RESOURCE_TAXONOMY.find(t => t.id === (r.itemId || r.id)) || RESOURCE_TAXONOMY[0];
+          return {
+            itemId: tax.id,
+            itemName: tax.name,
+            category: tax.category,
+            quantity: Number(r.quantity) || 1,
+            unit: tax.defaultUnit
+          };
+        }).filter(r => r.quantity > 0)
+      : undefined;
+
     const payload = {
       type: reportType,
       category: selectedCategory,
@@ -176,9 +190,9 @@ const CreateReport = () => {
         type: 'Point',
         coordinates: [locationCoords.lng, locationCoords.lat]
       },
-      images: images.map(img => img.name), // Currently mock data until Cloudinary is hooked up
+      images: images.map(img => img.name),
       impactAreas: reportType === 'major' ? parsedImpactAreas : undefined,
-      resourcesNeeded: reportType === 'major' ? resources.filter(r => r.itemName && r.quantity && r.unit) : undefined,
+      resourcesNeeded: parsedResourcesNeeded,
     };
 
     try {
@@ -501,12 +515,12 @@ const CreateReport = () => {
                     <div className="bg-primary/10 p-4 flex items-center justify-between border-b border-primary/20">
                       <div className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-primary">inventory_2</span>
-                        <h4 className="text-sm font-bold text-primary uppercase tracking-wider">Resource Allocation</h4>
+                        <h4 className="text-sm font-bold text-primary uppercase tracking-wider">Required Supplies Taxonomy</h4>
                       </div>
                       <button
                         type="button"
                         onClick={addResource}
-                        className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-surface-container text-primary border border-primary/30 px-3 py-1.5 rounded-full shadow-sm hover:bg-primary hover:text-white transition-colors"
+                        className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-surface-container text-primary border border-primary/30 px-3 py-1.5 rounded-full shadow-sm hover:bg-primary hover:text-white transition-colors cursor-pointer"
                       >
                         <span className="material-symbols-outlined text-[16px]">add</span>
                         Request Resource
@@ -515,38 +529,53 @@ const CreateReport = () => {
 
                     <div className="p-4 space-y-3">
                       {resources.length === 0 ? (
-                        <p className="text-xs text-on-surface-variant font-medium italic text-center py-2">No resources requested. Click "Request Resource" to add supplies or units needed.</p>
+                        <p className="text-xs text-on-surface-variant font-medium italic text-center py-2">No resources requested. Click "Request Resource" to add required supplies from the official catalog.</p>
                       ) : (
-                        resources.map((resource, index) => (
-                          <div key={index} className="flex gap-2 items-center">
-                            <input
-                              value={resource.itemName}
-                              onChange={(event) => updateResource(index, 'itemName', event.target.value)}
-                              placeholder="Item (e.g. Fire Trucks, Water)"
-                              className="flex-1 rounded-lg border border-primary/30 bg-surface-container-lowest px-4 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
-                            />
-                            <input
-                              type="number"
-                              value={resource.quantity}
-                              onChange={(event) => updateResource(index, 'quantity', event.target.value)}
-                              placeholder="Qty"
-                              className="w-20 rounded-lg border border-primary/30 bg-surface-container-lowest px-3 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary text-center"
-                            />
-                            <input
-                              value={resource.unit}
-                              onChange={(event) => updateResource(index, 'unit', event.target.value)}
-                              placeholder="Unit (e.g. units, liters)"
-                              className="w-28 rounded-lg border border-primary/30 bg-surface-container-lowest px-3 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
-                            />
-                            <button 
-                              type="button" 
-                              onClick={() => removeResource(index)}
-                              className="p-2 text-on-surface-variant hover:text-alert-red hover:bg-alert-red/10 rounded-lg transition-colors shrink-0"
-                            >
-                              <span className="material-symbols-outlined">delete</span>
-                            </button>
-                          </div>
-                        ))
+                        resources.map((resource, index) => {
+                          const currentTax = RESOURCE_TAXONOMY.find(r => r.id === (resource.itemId || resource.id)) || RESOURCE_TAXONOMY[0];
+                          return (
+                            <div key={index} className="flex flex-wrap sm:flex-nowrap gap-2 items-center bg-surface-container-lowest p-2 rounded-lg border border-primary/20">
+                              <select
+                                value={resource.itemId || currentTax.id}
+                                onChange={(event) => {
+                                  const selectedTax = RESOURCE_TAXONOMY.find(r => r.id === event.target.value);
+                                  updateResource(index, 'itemId', event.target.value);
+                                  if (selectedTax) updateResource(index, 'unit', selectedTax.defaultUnit);
+                                }}
+                                className="flex-1 rounded-lg border border-primary/30 bg-surface-container-lowest px-3 py-2 text-sm font-medium text-on-surface outline-none focus:border-primary"
+                              >
+                                {RESOURCE_TAXONOMY.map((item) => (
+                                  <option key={item.id} value={item.id}>
+                                    [{item.category}] {item.name}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={resource.quantity || 1}
+                                  onChange={(event) => updateResource(index, 'quantity', Math.max(1, parseInt(event.target.value) || 1))}
+                                  placeholder="Qty"
+                                  className="w-20 rounded-lg border border-primary/30 bg-surface-container-lowest px-3 py-2 text-sm font-bold text-on-surface outline-none focus:border-primary text-center"
+                                />
+                                <span className="text-xs font-bold uppercase tracking-wider bg-primary/10 text-primary px-2.5 py-2 rounded-lg shrink-0 min-w-[70px] text-center">
+                                  {currentTax.defaultUnit}
+                                </span>
+                              </div>
+
+                              <button 
+                                type="button" 
+                                onClick={() => removeResource(index)}
+                                className="p-2 text-on-surface-variant hover:text-alert-red hover:bg-alert-red/10 rounded-lg transition-colors shrink-0 cursor-pointer"
+                                title="Remove item"
+                              >
+                                <span className="material-symbols-outlined text-lg">delete</span>
+                              </button>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </div>

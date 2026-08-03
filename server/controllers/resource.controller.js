@@ -1,12 +1,25 @@
 const User = require("../models/User");
 const Report = require("../models/Report");
+const { RESOURCE_TAXONOMY, RESOURCE_CATEGORIES } = require("../constants/resources");
+
+// @desc    Get standardized resource taxonomy catalog
+// @route   GET /api/resources/taxonomy
+// @access  Public / Authenticated
+exports.getTaxonomy = async (req, res) => {
+  return res.status(200).json({
+    success: true,
+    data: {
+      taxonomy: RESOURCE_TAXONOMY,
+      categories: RESOURCE_CATEGORIES,
+    },
+  });
+};
 
 // @desc    Update user resource inventory
 // @route   PATCH /api/resources/inventory
 // @access  Protected (Volunteer, ResponseTeam)
 exports.updateInventory = async (req, res) => {
   try {
-    // Expected body: { inventory: [{ itemName, quantity, unit }] }
     const { inventory } = req.body;
 
     if (!Array.isArray(inventory)) {
@@ -16,19 +29,27 @@ exports.updateInventory = async (req, res) => {
       });
     }
 
-    // Basic validation on items
+    const formattedInventory = [];
     for (const item of inventory) {
-      if (!item.itemName || item.quantity == null || !item.unit) {
+      const tax = RESOURCE_TAXONOMY.find((r) => r.id === item.itemId || r.id === item.id);
+      if (!tax && !item.itemName) {
         return res.status(400).json({
           success: false,
-          message: "Each inventory item must have itemName, quantity, and unit.",
+          message: `Invalid resource itemId: '${item.itemId}'`,
         });
       }
+      formattedInventory.push({
+        itemId: item.itemId || item.id,
+        itemName: tax ? tax.name : item.itemName,
+        category: tax ? tax.category : item.category,
+        quantity: Math.max(0, Number(item.quantity) || 0),
+        unit: tax ? tax.defaultUnit : item.unit,
+      });
     }
 
     const updatedUser = await User.findByIdAndUpdate(
       req.user._id,
-      { $set: { inventory } },
+      { $set: { inventory: formattedInventory } },
       { new: true, runValidators: true }
     );
 
@@ -52,7 +73,6 @@ exports.updateInventory = async (req, res) => {
 exports.commitResources = async (req, res) => {
   try {
     const { id } = req.params;
-    // Expected body: { items: [{ itemName, quantity, unit }] }
     const { items } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -62,20 +82,16 @@ exports.commitResources = async (req, res) => {
       });
     }
 
-    // Validate items
     const newCommitments = [];
     for (const item of items) {
-      if (!item.itemName || item.quantity == null || !item.unit) {
-        return res.status(400).json({
-          success: false,
-          message: "Each committed item must have itemName, quantity, and unit.",
-        });
-      }
+      const tax = RESOURCE_TAXONOMY.find((r) => r.id === item.itemId || r.id === item.id);
       const commitment = {
         providerId: req.user._id,
-        itemName: item.itemName,
+        itemId: item.itemId || item.id,
+        itemName: tax ? tax.name : item.itemName,
+        category: tax ? tax.category : item.category,
         quantity: Number(item.quantity),
-        unit: item.unit,
+        unit: tax ? tax.defaultUnit : item.unit,
         createdAt: new Date(),
       };
 
@@ -89,7 +105,6 @@ exports.commitResources = async (req, res) => {
       newCommitments.push(commitment);
     }
 
-    // Resolve report to ensure it exists and is active
     const reportService = require("../services/report.service");
     const report = await reportService.resolveReportById(id);
 
@@ -107,9 +122,20 @@ exports.commitResources = async (req, res) => {
       });
     }
 
-    // Push new commitments
     report.resourcesCommitted.push(...newCommitments);
     await report.save();
+
+    // Broadcast Socket event
+    try {
+      const { emitReportToGeoRooms } = require("../socket");
+      emitReportToGeoRooms("report:resource_committed", report, {
+        reportId: report._id,
+        postId: report.postId,
+        resourcesCommitted: report.resourcesCommitted,
+      });
+    } catch (socketErr) {
+      console.warn("Socket emission failed for committed resources:", socketErr.message);
+    }
 
     return res.status(200).json({
       success: true,
@@ -130,9 +156,8 @@ exports.commitResources = async (req, res) => {
 // @access  Protected (Volunteer, ResponseTeam)
 exports.deductInventory = async (req, res) => {
   try {
-    // Expected body: { deductions: [{ itemName, quantityToDeduct }] }
     const { deductions } = req.body;
-    
+
     if (!Array.isArray(deductions)) {
       return res.status(400).json({
         success: false,
@@ -143,10 +168,13 @@ exports.deductInventory = async (req, res) => {
     const user = await User.findById(req.user._id);
 
     for (const deduction of deductions) {
-      const { itemName, quantityToDeduct } = deduction;
-      if (!itemName || quantityToDeduct == null) continue;
+      const { itemId, itemName, quantityToDeduct } = deduction;
+      if ((!itemId && !itemName) || quantityToDeduct == null) continue;
 
-      const itemIndex = user.inventory.findIndex((item) => item.itemName === itemName);
+      const itemIndex = user.inventory.findIndex(
+        (item) => (itemId && item.itemId === itemId) || (itemName && item.itemName === itemName)
+      );
+
       if (itemIndex > -1) {
         user.inventory[itemIndex].quantity -= Number(quantityToDeduct);
         if (user.inventory[itemIndex].quantity <= 0) {

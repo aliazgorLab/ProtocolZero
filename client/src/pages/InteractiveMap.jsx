@@ -21,20 +21,46 @@ const InteractiveMap = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('ALL');
 
+  // Layer Overlay Toggle Switches
+  const [showHomePin, setShowHomePin] = useState(true);
+  const [showCurrentPin, setShowCurrentPin] = useState(true);
+
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY
   });
 
   const [mapCenter, setMapCenter] = useState(() => {
-    if (user?.gps?.coordinates) {
-      return {
-        lat: user.gps.coordinates[1],
-        lng: user.gps.coordinates[0],
-      };
+    if (user?.currentAddressGps?.coordinates) {
+      return { lat: user.currentAddressGps.coordinates[1], lng: user.currentAddressGps.coordinates[0] };
     }
-    return { lat: 22.3569, lng: 91.7832 }; // Chittagong
+    if (user?.gps?.coordinates) {
+      return { lat: user.gps.coordinates[1], lng: user.gps.coordinates[0] };
+    }
+    return { lat: 22.3569, lng: 91.7832 }; // Default Chittagong
   });
+
+  // Calculate Home Pin Coordinates
+  const homePinCoords = useMemo(() => {
+    if (user?.homeAddressGps?.coordinates) {
+      const [lng, lat] = user.homeAddressGps.coordinates;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+    return null;
+  }, [user]);
+
+  // Calculate Current Location Pin Coordinates
+  const currentPinCoords = useMemo(() => {
+    if (user?.currentAddressGps?.coordinates) {
+      const [lng, lat] = user.currentAddressGps.coordinates;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+    if (user?.gps?.coordinates) {
+      const [lng, lat] = user.gps.coordinates;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+    return mapCenter;
+  }, [user, mapCenter]);
 
   useEffect(() => {
     const fetchReports = async () => {
@@ -54,9 +80,10 @@ const InteractiveMap = () => {
     fetchReports();
   }, []);
 
-  // Filter out reports with invalid coordinates and apply UI category/search filters
+  // Filter out closed reports and invalid coordinates
   const validReports = useMemo(() => {
     return reports.filter((r) => {
+      if (r.status === 'closed') return false;
       if (!isValidCoordinate(r.location)) return false;
       
       if (selectedCategoryFilter !== 'ALL' && r.category !== selectedCategoryFilter) {
@@ -116,7 +143,6 @@ const InteractiveMap = () => {
         }
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggleSheet = () => {
@@ -171,12 +197,35 @@ const InteractiveMap = () => {
               ]
             }}
           >
-            {/* User Location */}
-            <Marker
-              position={mapCenter}
-              title="Your Location"
-              icon={{ url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" }}
-            />
+            {/* 🏠 Home Address Marker Pin */}
+            {showHomePin && homePinCoords && (
+              <Marker
+                position={homePinCoords}
+                title={`Home Address: ${user?.homeAddress || 'Saved Home'}`}
+                label={{
+                  text: '🏠 HOME',
+                  color: '#ffffff',
+                  fontWeight: 'bold',
+                  fontSize: '11px',
+                }}
+                icon={{ url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" }}
+              />
+            )}
+
+            {/* 📍 Current Location Marker Pin */}
+            {showCurrentPin && currentPinCoords && (
+              <Marker
+                position={currentPinCoords}
+                title={`Current Location: ${user?.currentAddress || 'My Live Location'}`}
+                label={{
+                  text: '📍 CURRENT',
+                  color: '#ffffff',
+                  fontWeight: 'bold',
+                  fontSize: '11px',
+                }}
+                icon={{ url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png" }}
+              />
+            )}
 
             {/* Valid Incident Markers & Impact Circles */}
             {validReports.map((report) => {
@@ -212,7 +261,7 @@ const InteractiveMap = () => {
                         <p className="text-xs font-medium text-slate-600 mt-1 line-clamp-2">{report.description}</p>
                         <button
                           onClick={() => navigate(`/reports/${report.postId || report._id}`)}
-                          className="mt-2 bg-primary text-white text-[10px] font-bold uppercase px-2 py-1 rounded w-full"
+                          className="mt-2 bg-primary text-white text-[10px] font-bold uppercase px-2 py-1 rounded w-full cursor-pointer"
                         >
                           View Report
                         </button>
@@ -220,7 +269,7 @@ const InteractiveMap = () => {
                     </InfoWindow>
                   )}
 
-                  {/* Render Distinct Disaster Impact Zones for Major Reports */}
+                  {/* Render Disaster Impact Circles */}
                   {report.type === 'major' && Array.isArray(report.impactAreas) && report.impactAreas.map((area, idx) => (
                     <DisasterImpactCircle
                       key={`${report._id || report.postId}-${idx}`}
@@ -239,19 +288,52 @@ const InteractiveMap = () => {
         )}
       </div>
 
-      {/* Layer Overlay Controls */}
-      <div className="absolute top-20 right-4 z-10 flex flex-col gap-2">
-        <button onClick={handleRecenter} className="w-12 h-12 rounded-xl bg-inverse-surface/90 backdrop-blur shadow-lg flex items-center justify-center text-on-surface-variant transition-all active:scale-90 hover:bg-surface-container-high">
+      {/* Layer Overlay Controls & Action Controls */}
+      <div className="absolute top-20 right-4 z-10 flex flex-col items-end gap-2">
+        {/* Toggle Switches Panel */}
+        <div className="flex items-center gap-1.5 bg-inverse-surface/90 backdrop-blur-md p-1.5 rounded-2xl border border-outline-variant/30 text-xs font-bold text-white shadow-xl">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowHomePin(!showHomePin);
+            }}
+            className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition cursor-pointer ${
+              showHomePin ? 'bg-blue-600 text-white shadow-sm' : 'bg-white/10 text-white/60 hover:text-white'
+            }`}
+            title="Toggle Home Address Marker"
+          >
+            <span>🏠</span>
+            <span>Home Pin</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowCurrentPin(!showCurrentPin);
+            }}
+            className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition cursor-pointer ${
+              showCurrentPin ? 'bg-rose-600 text-white shadow-sm' : 'bg-white/10 text-white/60 hover:text-white'
+            }`}
+            title="Toggle Current Location Marker"
+          >
+            <span>📍</span>
+            <span>Current Pin</span>
+          </button>
+        </div>
+
+        <button onClick={handleRecenter} className="w-12 h-12 rounded-xl bg-inverse-surface/90 backdrop-blur shadow-lg flex items-center justify-center text-on-surface-variant transition-all active:scale-90 hover:bg-surface-container-high cursor-pointer" title="Center My GPS Location">
           <span className="material-symbols-outlined">my_location</span>
         </button>
-        <button onClick={() => navigate('/reports/create')} className="w-12 h-12 rounded-xl bg-alert-red text-white shadow-lg flex items-center justify-center transition-all active:scale-90 hover:bg-alert-red/90" title="Report Emergency">
+        <button onClick={() => navigate('/reports/create')} className="w-12 h-12 rounded-xl bg-alert-red text-white shadow-lg flex items-center justify-center transition-all active:scale-90 hover:bg-alert-red/90 cursor-pointer" title="Report Emergency">
           <span className="material-symbols-outlined">add</span>
         </button>
       </div>
 
       {/* Floating Search & Category Filter Bar */}
-      <div className="absolute top-20 left-4 right-20 z-10">
-        <div className="flex flex-col gap-2 max-w-lg">
+      <div className="absolute top-20 left-4 right-20 z-10 max-w-lg">
+        <div className="flex flex-col gap-2">
           <div className="relative group">
             <input 
               value={searchQuery}
@@ -274,7 +356,7 @@ const InteractiveMap = () => {
                     e.stopPropagation();
                     setSelectedCategoryFilter(cat);
                   }}
-                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm flex-shrink-0 transition-all ${
+                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm flex-shrink-0 transition-all cursor-pointer ${
                     active ? 'bg-primary text-white border-transparent' : 'bg-inverse-surface/90 text-white/80 border border-outline-variant/30 hover:bg-surface-container-high'
                   }`}
                 >
@@ -381,7 +463,7 @@ const InteractiveMap = () => {
                           e.stopPropagation();
                           navigate(`/reports/${report.postId || report._id}`);
                         }}
-                        className="bg-primary hover:bg-primary-container text-white px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider"
+                        className="bg-primary hover:bg-primary-container text-white px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider cursor-pointer"
                       >
                         Details
                       </button>

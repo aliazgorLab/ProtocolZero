@@ -3,11 +3,10 @@ const express = require("express");
 const router = express.Router();
 const { body, validationResult } = require("express-validator");
 const verifyFirebaseAuth = require("../middleware/auth.middleware");
-const { authorizeRoles } = require("../middleware/rbac.middleware");
 const userController = require("../controllers/user.controller");
 
 const rejectUnexpectedAddressFields = (req, res, next) => {
-  const allowedFields = ["currentAddress", "homeAddress", "gps", "currentAddressGps", "homeAddressGps"];
+  const allowedFields = ["currentAddress", "homeAddress", "gps", "currentAddressGps", "homeAddressGps", "inventory"];
   const extraFields = Object.keys(req.body || {}).filter(
     (field) => !allowedFields.includes(field),
   );
@@ -15,7 +14,7 @@ const rejectUnexpectedAddressFields = (req, res, next) => {
   if (extraFields.length > 0) {
     return res.status(400).json({
       success: false,
-      message: "Only currentAddress, homeAddress, gps, currentAddressGps, and homeAddressGps can be updated.",
+      message: "Only currentAddress, homeAddress, gps, currentAddressGps, homeAddressGps, and inventory can be updated.",
       data: {
         fields: extraFields,
       },
@@ -61,23 +60,18 @@ const validateGpsPoint = (value, { path }) => {
 
 const validateLocationUpdate = [
   body("currentAddress")
+    .optional()
     .isString()
     .withMessage("currentAddress must be a string.")
-    .trim()
-    .notEmpty()
-    .withMessage("currentAddress is required."),
+    .trim(),
   body("homeAddress")
+    .optional()
     .isString()
     .withMessage("homeAddress must be a string.")
-    .trim()
-    .notEmpty()
-    .withMessage("homeAddress is required."),
+    .trim(),
   body("gps")
-    .custom((value) => {
-      // Retain original required behavior for gps
-      if (!value) throw new Error("gps must be a GeoJSON Point object.");
-      return validateGpsPoint(value, { path: "gps" });
-    })
+    .optional()
+    .custom(validateGpsPoint)
     .withMessage("Invalid gps payload."),
   body("currentAddressGps")
     .optional()
@@ -108,12 +102,11 @@ const validateLocationUpdate = [
 ];
 
 // @route   PATCH /api/users/profile
-// @desc    Update the authenticated User or Volunteer's profile addresses
-// @access  Protected (User, Volunteer)
+// @desc    Update the authenticated user's profile addresses and inventory
+// @access  Protected
 router.patch(
   "/profile",
   verifyFirebaseAuth,
-  authorizeRoles("User", "Volunteer"),
   rejectUnexpectedAddressFields,
   ...validateLocationUpdate,
   userController.updateProfileAddresses,
@@ -121,11 +114,10 @@ router.patch(
 
 // @route   PATCH /api/users/toggle-volunteer
 // @desc    Switch between standard User and Volunteer mode
-// @access  Protected (User, Volunteer)
+// @access  Protected
 router.patch(
   "/toggle-volunteer",
   verifyFirebaseAuth,
-  authorizeRoles("User", "Volunteer"),
   userController.toggleVolunteerMode,
 );
 

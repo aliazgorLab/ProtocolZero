@@ -1,6 +1,6 @@
-// server/controllers/user.controller.js
 const User = require("../models/User");
 const Report = require("../models/Report");
+const { RESOURCE_TAXONOMY } = require("../constants/resources");
 
 /**
  * Toggles a user's accountType between 'User' and 'Volunteer'.
@@ -77,35 +77,50 @@ exports.toggleVolunteerMode = async (req, res) => {
 };
 
 /**
- * Updates the authenticated user's currentAddress, homeAddress, and gps only.
- * Ownership is enforced by using req.user._id; no other profile fields are changed.
+ * Updates the authenticated user's currentAddress, homeAddress, gps, and inventory.
  */
 exports.updateProfileAddresses = async (req, res) => {
   try {
-    const { currentAddress, homeAddress, gps, currentAddressGps, homeAddressGps } = req.body;
+    const { currentAddress, homeAddress, gps, currentAddressGps, homeAddressGps, inventory } = req.body;
     const userId = req.user._id;
 
-    const updateData = {
-      currentAddress: currentAddress.trim(),
-      homeAddress: homeAddress.trim(),
-      gps: {
-        type: gps.type,
-        coordinates: gps.coordinates,
-      },
-    };
+    const updateData = {};
 
-    if (currentAddressGps) {
+    if (currentAddress !== undefined) updateData.currentAddress = String(currentAddress).trim();
+    if (homeAddress !== undefined) updateData.homeAddress = String(homeAddress).trim();
+
+    if (gps && gps.type === "Point" && Array.isArray(gps.coordinates)) {
+      updateData.gps = {
+        type: "Point",
+        coordinates: gps.coordinates,
+      };
+    }
+
+    if (currentAddressGps && currentAddressGps.type === "Point" && Array.isArray(currentAddressGps.coordinates)) {
       updateData.currentAddressGps = {
-        type: currentAddressGps.type,
+        type: "Point",
         coordinates: currentAddressGps.coordinates,
       };
     }
 
-    if (homeAddressGps) {
+    if (homeAddressGps && homeAddressGps.type === "Point" && Array.isArray(homeAddressGps.coordinates)) {
       updateData.homeAddressGps = {
-        type: homeAddressGps.type,
+        type: "Point",
         coordinates: homeAddressGps.coordinates,
       };
+    }
+
+    if (Array.isArray(inventory)) {
+      updateData.inventory = inventory.map(item => {
+        const tax = RESOURCE_TAXONOMY.find(r => r.id === (item.itemId || item.id));
+        return {
+          itemId: item.itemId || item.id,
+          itemName: tax ? tax.name : item.itemName || "Resource Item",
+          category: tax ? tax.category : item.category || "Supplies",
+          quantity: Math.max(0, Number(item.quantity) || 0),
+          unit: tax ? tax.defaultUnit : item.unit || "units",
+        };
+      });
     }
 
     const updatedUser = await User.findByIdAndUpdate(
@@ -126,14 +141,14 @@ exports.updateProfileAddresses = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Profile addresses updated successfully.",
+      message: "Profile updated successfully.",
       data: updatedUser,
     });
   } catch (error) {
     console.error("[ERROR] Profile Address Update Failure:", error.message);
     return res.status(500).json({
       success: false,
-      message: "Internal server error while updating profile addresses.",
+      message: "Internal server error while updating profile details.",
     });
   }
 };

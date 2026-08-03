@@ -3,11 +3,11 @@ const Notification = require("../models/Notification");
 const { emitToRoom } = require("../socket");
 const User = require("../models/User");
 
-// §17.4 logic
+// §17.4 logic: Fake & Suspicious Report Detection
 function isSuspicious(u, d) {
-  if (d === 0) return false;                  // a brand-new 0/0 report is not suspicious
-  if (u === 0 && d < 2) return true;
-  if (u <= d && u > 2 && d > 2) return true;  // clauses 2 and 3 merged
+  if (d === 0) return false; // a report with 0 downvotes is not suspicious
+  if (u === 0 && d >= 1) return true; // 0 upvotes with downvotes is suspicious
+  if (u <= d && d >= 2) return true; // downvotes >= upvotes (at least 2 downvotes)
   return false;
 }
 
@@ -53,15 +53,22 @@ exports.checkAndEscalateReport = async (reportId) => {
       }).select("_id");
 
       if (authorities.length > 0) {
-        const notifications = authorities.map(auth => ({
+        const notifications = authorities.map((auth) => ({
           recipientId: auth._id,
           referenceId: report._id,
           referenceModel: "Report",
           type: "report_escalated",
-          message: `Suspicious Report Detected: Report ${report.postId} has been flagged as potentially false by community votes.`,
+          message: `Suspicious Report Detected: Report ${report.postId || report.category} has been flagged as potentially false by community votes (${u} upvotes / ${d} downvotes).`,
         }));
 
-        await Notification.insertMany(notifications);
+        const createdNotifs = await Notification.insertMany(notifications);
+        createdNotifs.forEach((notif) => {
+          try {
+            emitToRoom(`user:${notif.recipientId}`, "notification:new", notif);
+          } catch (e) {
+            console.error("Failed to emit notification to admin:", e.message);
+          }
+        });
       }
     }
   } catch (error) {

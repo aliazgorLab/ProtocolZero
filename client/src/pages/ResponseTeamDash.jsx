@@ -1,196 +1,571 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
 import axiosInstance from '../api/axiosInstance';
+import { useToast } from '../context/ToastContext';
+import DisasterImpactCircle from '../components/DisasterImpactCircle';
+import { getDisasterConfig, isValidCoordinate } from '../utils/disasterColors';
+import { RESOURCE_TAXONOMY } from '../constants/resources';
+
+// Haversine Distance Calculation (km)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  if (!Number.isFinite(lat1) || !Number.isFinite(lon1) || !Number.isFinite(lat2) || !Number.isFinite(lon2)) {
+    return null;
+  }
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return (R * c).toFixed(1);
+}
 
 const ResponseTeamDash = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const { user: currentUser } = useSelector((state) => state.auth);
-  
+
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedReportId, setSelectedReportId] = useState(null);
+  
+  // Modals state
+  const [inspectingVictimsReport, setInspectingVictimsReport] = useState(null); // Report object for victim drawer
+  const [committingAssetReport, setCommittingAssetReport] = useState(null); // Report object for commit modal
+  
+  // Asset Commitment Form
+  const [selectedAssetItem, setSelectedAssetItem] = useState(RESOURCE_TAXONOMY[0].id);
+  const [assetQuantity, setAssetQuantity] = useState(1);
+  const [submittingAsset, setSubmittingAsset] = useState(false);
+
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+  });
+
+  // User coordinates
+  const userLat = currentUser?.currentAddressGps?.coordinates?.[1] || currentUser?.gps?.coordinates?.[1] || 22.3569;
+  const userLng = currentUser?.currentAddressGps?.coordinates?.[0] || currentUser?.gps?.coordinates?.[0] || 91.7832;
+
+  const [mapCenter, setMapCenter] = useState({ lat: userLat, lng: userLng });
+
+  const fetchTacticalReports = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get('/reports');
+      if (res.data?.data) {
+        setReports(res.data.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch command telemetry:", err);
+      showToast("Failed to load active tactical telemetry.", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchReports = async () => {
-      try {
-        setLoading(true);
-        const res = await axiosInstance.get('/reports');
-        if (res.data?.data) {
-          setReports(res.data.data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch tactical reports:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchReports();
+    fetchTacticalReports();
   }, []);
 
-  const activeIncidents = reports.filter(r => r.status === 'active');
+  // Filter active non-closed reports and sort by urgency (Major + Victim count + distance)
+  const activeReports = useMemo(() => {
+    return reports
+      .filter(r => r.status === 'active')
+      .map(r => {
+        const [lng, lat] = r.location?.coordinates || [0, 0];
+        const dist = calculateDistance(userLat, userLng, lat, lng);
+        const victimCount = Array.isArray(r.victims) ? r.victims.length : 0;
+        return {
+          ...r,
+          distanceKm: dist,
+          victimCount,
+        };
+      })
+      .sort((a, b) => {
+        // Priority 1: Major Disasters & SOS victims first
+        const priorityA = (a.type === 'major' ? 100 : 0) + (a.victimCount * 10);
+        const priorityB = (b.type === 'major' ? 100 : 0) + (b.victimCount * 10);
+        if (priorityA !== priorityB) return priorityB - priorityA;
+        
+        // Priority 2: Closer distance
+        if (a.distanceKm && b.distanceKm) {
+          return parseFloat(a.distanceKm) - parseFloat(b.distanceKm);
+        }
+        return 0;
+      });
+  }, [reports, userLat, userLng]);
+
+  const selectedReport = useMemo(() => {
+    return activeReports.find(r => (r._id || r.postId) === selectedReportId) || activeReports[0] || null;
+  }, [activeReports, selectedReportId]);
+
+  const handleSelectReport = (report) => {
+    const reportId = report._id || report.postId;
+    setSelectedReportId(reportId);
+    if (isValidCoordinate(report.location)) {
+      const [lng, lat] = report.location.coordinates;
+      setMapCenter({ lat, lng });
+    }
+  };
+
+  // Commit Asset Submission
+  const handleCommitAssetSubmit = async (e) => {
+    e.preventDefault();
+    if (!committingAssetReport) return;
+
+    const reportId = committingAssetReport._id || committingAssetReport.postId;
+    try {
+      setSubmittingAsset(true);
+      const tax = RESOURCE_TAXONOMY.find(t => t.id === selectedAssetItem) || RESOURCE_TAXONOMY[0];
+      const payload = {
+        items: [
+          {
+            itemId: tax.id,
+            quantity: Number(assetQuantity),
+          }
+        ]
+      };
+
+      const res = await axiosInstance.patch(`/reports/${reportId}/resources`, payload);
+      if (res.data?.data) {
+        showToast(`Committed ${assetQuantity} x ${tax.name} to Incident ${committingAssetReport.postId || reportId}!`, "success");
+        setCommittingAssetReport(null);
+        fetchTacticalReports();
+      }
+    } catch (err) {
+      console.error("Asset deployment failed:", err);
+      showToast(err.response?.data?.message || "Failed to commit asset deployment.", "error");
+    } finally {
+      setSubmittingAsset(false);
+    }
+  };
 
   return (
-    <div className="bg-background text-on-surface flex flex-col h-screen overflow-hidden">
-      {/* TopAppBar */}
-      <header className="fixed top-0 w-full z-50 bg-surface/80 dark:bg-surface-dim/80 backdrop-blur-md shadow-sm flex justify-between items-center px-4 h-14">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/home')} className="material-symbols-outlined text-primary hover:bg-surface-variant/50 transition-colors p-2 rounded-full active:scale-95">arrow_back</button>
-          <h1 className="text-xl font-bold text-primary">Protocol Zero Command</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="hidden md:flex bg-error-container text-on-error-container px-3 py-1 rounded-full items-center gap-1 animate-pulse">
-            <span className="material-symbols-outlined text-[16px] fill-icon">emergency</span>
-            <span className="text-xs font-bold uppercase tracking-wider">{activeIncidents.length} ACTIVE INCIDENTS</span>
+    <div className="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden">
+      
+      {/* Top Operations Command Header */}
+      <header className="h-14 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md px-4 flex items-center justify-between z-40 shrink-0">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/home')}
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition cursor-pointer"
+            title="Return to Home Feed"
+          >
+            <span className="material-symbols-outlined text-xl">arrow_back</span>
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-600 text-white font-black">
+              <span className="material-symbols-outlined text-lg">local_police</span>
+            </div>
+            <div>
+              <h1 className="text-sm font-black uppercase tracking-wider text-white">PROTOCOL ZERO COMMAND DECK</h1>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                Officer: {currentUser?.name || 'Response Officer'} ({currentUser?.accountType || 'ResponseTeam'})
+              </p>
+            </div>
           </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-rose-950/80 border border-rose-800 text-rose-300 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider animate-pulse">
+            <span className="material-symbols-outlined text-sm">emergency</span>
+            <span>{activeReports.length} ACTIVE INCIDENTS PLOTTED</span>
+          </div>
+          <button
+            onClick={fetchTacticalReports}
+            className="flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">refresh</span>
+            Refresh Telemetry
+          </button>
         </div>
       </header>
 
-      {/* Main Content Grid */}
-      <main className="mt-14 flex-1 flex flex-col md:flex-row overflow-hidden relative">
+      {/* Main Dual-Pane Command Grid */}
+      <main className="flex-1 grid grid-cols-1 lg:grid-cols-[440px_1fr] overflow-hidden">
         
-        {/* Sidebar Navigation */}
-        <aside className="hidden md:flex flex-col h-full w-80 bg-surface-container-lowest shadow-xl py-6 px-4 z-40">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 rounded-full overflow-hidden bg-primary-container flex items-center justify-center font-bold text-primary">
-              <span className="material-symbols-outlined text-2xl">local_police</span>
-            </div>
+        {/* LEFT PANE: Live Tactical Emergency Queue */}
+        <section className="border-r border-slate-800 bg-slate-900/50 flex flex-col h-full overflow-hidden">
+          <div className="p-4 border-b border-slate-800 bg-slate-900 flex items-center justify-between">
             <div>
-              <h3 className="text-xl font-bold text-primary">{currentUser?.name || 'Response Officer'}</h3>
-              <p className="text-xs font-medium text-on-surface-variant">{currentUser?.accountType || 'Response Team'}</p>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+                <span className="material-symbols-outlined text-rose-500">crisis_alert</span>
+                Live Emergency Queue ({activeReports.length})
+              </h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">Sorted by hazard urgency and distance</p>
             </div>
           </div>
-          
-          <nav className="flex flex-col gap-2">
-            <Link to="/response-team/dashboard" className="bg-secondary-container text-on-secondary-container font-bold rounded-full px-4 py-3 flex items-center gap-4 active:opacity-80 transition-opacity">
-              <span className="material-symbols-outlined fill-icon">dashboard</span>
-              <span className="text-base">Control Deck</span>
-            </Link>
-            <Link to="/map" className="text-on-surface-variant px-4 py-3 flex items-center gap-4 hover:bg-surface-container-high transition-colors rounded-full">
-              <span className="material-symbols-outlined">map</span>
-              <span className="text-base">Tactical Map</span>
-            </Link>
-            <Link to="/home" className="text-on-surface-variant px-4 py-3 flex items-center gap-4 hover:bg-surface-container-high transition-colors rounded-full">
-              <span className="material-symbols-outlined">rss_feed</span>
-              <span className="text-base">Live Feed</span>
-            </Link>
-          </nav>
-        </aside>
 
-        {/* Tactical Status & Actions Section */}
-        <section className="flex-1 relative bg-surface-dim p-6 overflow-y-auto">
-          <div className="max-w-3xl mx-auto space-y-6">
-            
-            {/* Action Card */}
-            <div className="bg-surface p-6 rounded-2xl border border-outline-variant/30 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div>
-                <h2 className="text-xl font-bold text-on-surface">Emergency Response Console</h2>
-                <p className="text-sm text-on-surface-variant mt-1">Coordinate resources, view active incident telemetry, and commit units.</p>
-              </div>
-              <button 
-                onClick={() => navigate('/map')}
-                className="bg-primary text-white px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-md hover:bg-primary/90 transition-all shrink-0"
-              >
-                OPEN TACTICAL MAP
-              </button>
-            </div>
-
-            {/* Incidents Overview */}
-            <div className="bg-surface p-6 rounded-2xl border border-outline-variant/30 shadow-sm">
-              <h3 className="text-lg font-bold text-on-surface mb-4">Active Incident Dispatch List</h3>
-              
-              {loading ? (
-                <div className="text-center py-8 text-on-surface-variant">
-                  <span className="material-symbols-outlined animate-spin text-[32px] mb-2">progress_activity</span>
-                  <p className="text-xs font-medium">Syncing active dispatches...</p>
-                </div>
-              ) : activeIncidents.length === 0 ? (
-                <div className="text-center py-8 bg-surface-container-low rounded-xl border border-outline-variant/20">
-                  <span className="material-symbols-outlined text-4xl text-outline mb-2">check_circle</span>
-                  <p className="font-bold text-on-surface">No Active Emergency Dispatches</p>
-                  <p className="text-xs text-on-surface-variant mt-1">All tactical sectors reporting clear.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {activeIncidents.map((incident) => (
-                    <div 
-                      key={incident._id || incident.postId}
-                      className="p-4 rounded-xl border border-outline-variant/30 bg-surface-container-lowest flex flex-col md:flex-row justify-between items-start md:items-center gap-3"
-                    >
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                            incident.type === 'major' ? 'bg-alert-red text-white' : 'bg-primary-container text-on-primary-container'
-                          }`}>
-                            {incident.type === 'major' ? 'MAJOR DISASTER' : 'MINOR'}
-                          </span>
-                          <span className="font-bold text-on-surface text-sm">{incident.category}</span>
-                          {Array.isArray(incident.victims) && incident.victims.length > 0 && (
-                            <span className="bg-alert-red/10 text-alert-red border border-alert-red/30 text-[10px] font-bold uppercase px-2 py-0.5 rounded flex items-center gap-1 animate-pulse">
-                              <span className="material-symbols-outlined text-xs">sos</span>
-                              {incident.victims.length} VICTIM{incident.victims.length > 1 ? 'S' : ''}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-on-surface-variant line-clamp-2">{incident.description}</p>
-                      </div>
-
-                      <button 
-                        onClick={() => navigate(`/reports/${incident.postId || incident._id}`)}
-                        className="bg-secondary text-white text-xs font-bold uppercase px-4 py-2 rounded-lg shrink-0 hover:bg-secondary/90"
-                      >
-                        Inspect
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-          </div>
-        </section>
-
-        {/* Alert Queue Side Panel */}
-        <section className="w-full md:w-[380px] bg-surface-container-low flex flex-col border-l border-outline-variant z-30">
-          <div className="p-4 flex items-center justify-between border-b border-outline-variant">
-            <h2 className="text-lg font-bold flex items-center gap-2 text-on-surface">
-              <span className="material-symbols-outlined text-alert-red fill-icon">notifications_active</span>
-              Live Queue
-            </h2>
-            <span className="bg-surface-variant px-3 py-1 rounded-full text-xs font-medium text-on-surface-variant">{reports.length} Total</span>
-          </div>
-          
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {reports.length === 0 ? (
-              <div className="text-center py-12 text-on-surface-variant">
-                <span className="material-symbols-outlined text-4xl mb-2 opacity-40">inbox</span>
-                <p className="text-xs font-medium">Queue empty.</p>
+            {loading ? (
+              <div className="text-center py-16 text-slate-400">
+                <span className="material-symbols-outlined animate-spin text-[36px] mb-2 text-rose-500">progress_activity</span>
+                <p className="text-xs font-bold uppercase tracking-wider">Syncing tactical emergency telemetry...</p>
+              </div>
+            ) : activeReports.length === 0 ? (
+              <div className="text-center py-16 bg-slate-900/80 rounded-2xl border border-slate-800 p-6">
+                <span className="material-symbols-outlined text-5xl mb-2 text-emerald-500">verified</span>
+                <p className="font-bold text-slate-200 text-sm">All Sectors Operational</p>
+                <p className="text-xs text-slate-400 mt-1">No active emergency dispatches currently assigned.</p>
               </div>
             ) : (
-              reports.map((report) => (
-                <div 
-                  key={report._id || report.postId}
-                  className="bg-surface-container-lowest rounded-xl shadow-sm border-l-4 border-primary p-3 hover:shadow-md transition-all"
-                >
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-primary">{report.category}</span>
-                    <span className="text-[10px] text-on-surface-variant opacity-70">
-                      {report.createdAt ? new Date(report.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-on-surface line-clamp-2 mb-3">{report.description}</p>
-                  <button 
-                    onClick={() => navigate(`/reports/${report.postId || report._id}`)}
-                    className="bg-primary text-white w-full py-1.5 rounded text-[11px] font-bold uppercase tracking-wider"
+              activeReports.map((report) => {
+                const reportId = report._id || report.postId;
+                const isSelected = selectedReport?._id === report._id || selectedReport?.postId === report.postId;
+                const config = getDisasterConfig(report.category);
+                const isMajor = report.type === 'major';
+                const victims = report.victims || [];
+                const committedAssets = report.resourcesCommitted || [];
+
+                return (
+                  <div
+                    key={reportId}
+                    onClick={() => handleSelectReport(report)}
+                    className={`rounded-2xl border p-4 transition cursor-pointer flex flex-col gap-3 ${
+                      isSelected
+                        ? 'border-rose-500 bg-slate-900 shadow-lg ring-1 ring-rose-500'
+                        : 'border-slate-800 bg-slate-900/70 hover:border-slate-700 hover:bg-slate-900'
+                    }`}
                   >
-                    View Report
-                  </button>
-                </div>
-              ))
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                          isMajor ? 'bg-rose-600 text-white' : 'bg-blue-600 text-white'
+                        }`}>
+                          {isMajor ? 'MAJOR DISASTER' : 'STANDARD'}
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-bold uppercase tracking-wider text-slate-300">
+                          {report.category}
+                        </span>
+                      </div>
+
+                      <span className="font-mono text-xs font-bold text-slate-400">
+                        {report.distanceKm ? `${report.distanceKm} km away` : 'Nearby'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h3 className="text-base font-bold text-white flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-lg" style={{ color: config.hex }}>
+                          {config.icon}
+                        </span>
+                        {report.category} Incident ({report.postId || report._id})
+                      </h3>
+                      <p className="text-xs text-slate-300 mt-1 line-clamp-2 leading-relaxed">{report.description}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setInspectingVictimsReport(report);
+                        }}
+                        className={`flex items-center gap-1 font-bold transition ${
+                          victims.length > 0 ? 'text-rose-400 hover:text-rose-300' : 'text-slate-500 hover:text-slate-300'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-sm">sos</span>
+                        <span>{victims.length} Victim{victims.length === 1 ? '' : 's'}</span>
+                      </button>
+
+                      <div className="flex items-center gap-1 font-bold text-emerald-400">
+                        <span className="material-symbols-outlined text-sm">local_shipping</span>
+                        <span>{committedAssets.length} Assets Deployed</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCommittingAssetReport(report);
+                        }}
+                        className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider transition active:scale-95 cursor-pointer shadow-sm text-center"
+                      >
+                        Deploy Assets
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/reports/${reportId}`);
+                        }}
+                        className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs uppercase tracking-wider transition cursor-pointer text-center"
+                      >
+                        Details
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         </section>
+
+        {/* RIGHT PANE: Interactive Google Command Map */}
+        <section className="relative h-full w-full bg-slate-950 overflow-hidden">
+          {isLoaded ? (
+            <GoogleMap
+              mapContainerStyle={{ width: '100%', height: '100%' }}
+              center={mapCenter}
+              zoom={14}
+              options={{
+                disableDefaultUI: true,
+                zoomControl: true,
+                styles: [
+                  { featureType: "all", elementType: "geometry", stylers: [{ color: "#1d2c4d" }] },
+                  { featureType: "all", elementType: "labels.text.fill", stylers: [{ color: "#8ec3b9" }] },
+                  { featureType: "all", elementType: "labels.text.stroke", stylers: [{ color: "#1a3646" }] },
+                  { featureType: "road", elementType: "geometry", stylers: [{ color: "#304a7d" }] },
+                  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0e1626" }] }
+                ]
+              }}
+            >
+              {/* Officer Command Unit Position */}
+              <Marker
+                position={{ lat: userLat, lng: userLng }}
+                title="Your Command Unit"
+                label={{ text: "🛡️ COMMAND UNIT", color: "#ffffff", fontWeight: "bold", fontSize: "10px" }}
+                icon={{ url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" }}
+              />
+
+              {/* Active Incident Markers */}
+              {activeReports.map((report) => {
+                const reportId = report._id || report.postId;
+                if (!isValidCoordinate(report.location)) return null;
+                const [lng, lat] = report.location.coordinates;
+                const isSelected = selectedReport?._id === report._id || selectedReport?.postId === report.postId;
+                const config = getDisasterConfig(report.category);
+
+                return (
+                  <React.Fragment key={reportId}>
+                    <Marker
+                      position={{ lat, lng }}
+                      title={`${report.category} Incident`}
+                      label={{
+                        text: `${report.category.toUpperCase()} (${report.victimCount} SOS)`,
+                        color: isSelected ? '#ff3366' : '#ffffff',
+                        fontWeight: 'bold',
+                        fontSize: '11px',
+                      }}
+                      onClick={() => handleSelectReport(report)}
+                    />
+
+                    {/* Render Disaster Impact Circles */}
+                    {report.type === 'major' && Array.isArray(report.impactAreas) && report.impactAreas.map((area, idx) => (
+                      <DisasterImpactCircle
+                        key={`${reportId}-${idx}`}
+                        area={area}
+                        category={report.category}
+                      />
+                    ))}
+
+                    {/* Render Attached Victims Markers */}
+                    {Array.isArray(report.victims) && report.victims.map((victim, vIdx) => {
+                      const victimUser = victim.userId || {};
+                      const coords = victimUser.gps?.coordinates || report.location.coordinates;
+                      const [vLng, vLat] = coords;
+
+                      return (
+                        <Marker
+                          key={`victim-${reportId}-${vIdx}`}
+                          position={{ lat: vLat, lng: vLng }}
+                          title={`Victim: ${victimUser.name || 'Citizen'}`}
+                          label={{ text: `🆘 ${victimUser.name || 'VICTIM'}`, color: '#ff4d4d', fontWeight: 'bold', fontSize: '10px' }}
+                          icon={{ url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png" }}
+                        />
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </GoogleMap>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-slate-400">
+              <span className="material-symbols-outlined animate-spin text-[40px] text-rose-500">progress_activity</span>
+            </div>
+          )}
+        </section>
       </main>
+
+      {/* MODAL 1: Victim Profile Drawer */}
+      {inspectingVictimsReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-end bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border-l border-slate-800 w-full max-w-md h-full shadow-2xl flex flex-col p-6 overflow-hidden">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-rose-400">
+                <span className="material-symbols-outlined text-2xl">sos</span>
+                <h3 className="text-base font-bold text-white">Registered Victims Roster</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectingVictimsReport(null)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400 mt-3 mb-4">
+              Victims attached to incident <strong className="text-white">{inspectingVictimsReport.postId || inspectingVictimsReport._id}</strong> ({inspectingVictimsReport.category}):
+            </p>
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {(!inspectingVictimsReport.victims || inspectingVictimsReport.victims.length === 0) ? (
+                <div className="text-center py-12 text-slate-500">
+                  <span className="material-symbols-outlined text-4xl mb-2">person_off</span>
+                  <p className="text-xs font-bold">No victims currently registered on this report.</p>
+                </div>
+              ) : (
+                inspectingVictimsReport.victims.map((victim, idx) => {
+                  const victimUser = victim.userId || {};
+                  const isLiveGPS = victim.gpsStatus === 'success';
+
+                  return (
+                    <div key={victim._id || idx} className="rounded-2xl border border-slate-800 bg-slate-950 p-4 space-y-2 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-rose-950 border border-rose-800 text-rose-400 flex items-center justify-center font-bold">
+                            <span className="material-symbols-outlined text-xl">person_pin</span>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-white">{victimUser.name || 'Citizen Victim'}</h4>
+                            <p className="text-xs text-slate-400">{victimUser.accountType || 'Citizen'}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* GPS Signal Status Warning Badge */}
+                      <div className="pt-1">
+                        {isLiveGPS ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950 text-emerald-300 border border-emerald-800">
+                            <span className="material-symbols-outlined text-xs">satellite_alt</span>
+                            LIVE GPS SIGNAL CONFIRMED
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-950 text-amber-300 border border-amber-800">
+                            <span className="material-symbols-outlined text-xs">warning</span>
+                            REGISTERED ADDRESS FALLBACK (GPS INACTIVE)
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs text-slate-300 font-mono pt-2 border-t border-slate-800">
+                        <div>
+                          <span className="font-bold text-slate-400">Phone:</span> {victimUser.phone || 'N/A'}
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-400">Email:</span> {victimUser.email || 'N/A'}
+                        </div>
+                        <div className="sm:col-span-2">
+                          <span className="font-bold text-slate-400">Home Address:</span> {victimUser.homeAddress || 'N/A'}
+                        </div>
+                        <div className="sm:col-span-2">
+                          <span className="font-bold text-slate-400">Current Address:</span> {victimUser.currentAddress || 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-slate-800 mt-auto">
+              <button
+                type="button"
+                onClick={() => setInspectingVictimsReport(null)}
+                className="w-full py-2.5 rounded-xl bg-slate-800 text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
+              >
+                Close Drawer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: One-Click Asset Commitment Modal */}
+      {committingAssetReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl">
+            <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-emerald-400">
+                <span className="material-symbols-outlined text-2xl">local_shipping</span>
+                <h3 className="text-base font-bold text-white">Deploy Official Response Asset</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCommittingAssetReport(null)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400 mb-4">
+              Deploying heavy equipment / vehicles to incident <strong className="text-white">{committingAssetReport.postId || committingAssetReport._id}</strong> ({committingAssetReport.category}).
+            </p>
+
+            <form onSubmit={handleCommitAssetSubmit} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                  Select Resource Equipment / Vehicle
+                </label>
+                <select
+                  value={selectedAssetItem}
+                  onChange={(e) => setSelectedAssetItem(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 p-3 text-xs font-bold text-white outline-none focus:border-emerald-500 cursor-pointer"
+                >
+                  {RESOURCE_TAXONOMY.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      [{item.category}] {item.name} ({item.defaultUnit})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                  Deployment Quantity
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={assetQuantity}
+                  onChange={(e) => setAssetQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 p-3 text-xs font-bold text-white outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCommittingAssetReport(null)}
+                  className="flex-1 py-3 rounded-xl border border-slate-700 text-xs font-bold uppercase tracking-wider text-slate-300 hover:bg-slate-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingAsset}
+                  className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider transition active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                  {submittingAsset ? 'Deploying...' : 'Confirm Deployment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

@@ -39,6 +39,7 @@ exports.createReport = async (req, res) => {
       location,
       impactAreas,
       images,
+      resourcesNeeded,
     } = req.body;
 
     if (
@@ -102,6 +103,21 @@ exports.createReport = async (req, res) => {
       req.user.accountType,
     );
 
+    const formattedResourcesNeeded = Array.isArray(resourcesNeeded)
+      ? resourcesNeeded.map((item) => {
+          const tax = RESOURCE_TAXONOMY.find(
+            (r) => r.id === item.itemId || r.id === item.id,
+          );
+          return {
+            itemId: item.itemId || item.id,
+            itemName: tax ? tax.name : item.itemName || "Resource Item",
+            category: tax ? tax.category : item.category || "Supplies",
+            quantity: Math.max(1, Number(item.quantity) || 1),
+            unit: tax ? tax.defaultUnit : item.unit || "units",
+          };
+        })
+      : [];
+
     let newReport;
     let notificationCount = 0;
     let createdNotifications = [];
@@ -115,6 +131,7 @@ exports.createReport = async (req, res) => {
         description: description || null,
         location,
         impactAreas: type === "major" ? impactAreas : [],
+        resourcesNeeded: type === "major" ? formattedResourcesNeeded : [],
         image: reportService.normalizeImageList(images),
         reliability: isTrustedAuthor ? "valid" : "none",
       });
@@ -326,6 +343,13 @@ exports.addReportComment = async (req, res) => {
       });
     }
 
+    if (report.status === "closed") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot comment on a closed report.",
+      });
+    }
+
     const comment = {
       commenterId: req.user._id,
       text,
@@ -389,6 +413,13 @@ exports.voteOnReport = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Report not found.",
+      });
+    }
+
+    if (report.status === "closed") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot vote on a closed report.",
       });
     }
 
@@ -949,9 +980,11 @@ exports.closeReport = async (req, res) => {
   }
 };
 
-// @desc    Update resources needed by the report author
+const { RESOURCE_TAXONOMY } = require("../constants/resources");
+
+// @desc    Update resources needed by the report author or admin
 // @route   PATCH /api/reports/:id/resources-needed
-// @access  Protected (Report Author Only)
+// @access  Protected (Report Author or Admin)
 exports.updateResourcesNeeded = async (req, res) => {
   try {
     const { id } = req.params;
@@ -973,25 +1006,37 @@ exports.updateResourcesNeeded = async (req, res) => {
       });
     }
 
-    // Only the author can update this
-    if (report.issuerId.toString() !== req.user._id.toString()) {
+    const isAuthor = report.issuerId?._id
+      ? report.issuerId._id.toString() === req.user._id.toString()
+      : report.issuerId?.toString() === req.user._id.toString();
+    const isAdmin = ["Admin", "SuperAdmin"].includes(req.user.accountType);
+
+    if (!isAuthor && !isAdmin) {
       return res.status(403).json({
         success: false,
-        message: "Forbidden: Only the original report author can update resources needed.",
+        message: "Forbidden: Only the Report Author or an Admin can update resources needed.",
       });
     }
 
-    // Basic validation on items
+    const formattedResources = [];
     for (const item of resourcesNeeded) {
-      if (!item.itemName || item.quantity == null || !item.unit) {
+      const tax = RESOURCE_TAXONOMY.find((r) => r.id === item.itemId || r.id === item.id);
+      if (!tax && !item.itemName) {
         return res.status(400).json({
           success: false,
-          message: "Each resource needed must have itemName, quantity, and unit.",
+          message: `Invalid resource itemId: '${item.itemId}'`,
         });
       }
+      formattedResources.push({
+        itemId: item.itemId || item.id,
+        itemName: tax ? tax.name : item.itemName,
+        category: tax ? tax.category : item.category,
+        quantity: Math.max(1, Number(item.quantity) || 1),
+        unit: tax ? tax.defaultUnit : item.unit,
+      });
     }
 
-    report.resourcesNeeded = resourcesNeeded;
+    report.resourcesNeeded = formattedResources;
     await report.save();
 
     return res.status(200).json({

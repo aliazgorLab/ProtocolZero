@@ -16,6 +16,7 @@ import InteractiveMap from '../pages/InteractiveMap';
 import ResponseTeamDash from '../pages/ResponseTeamDash';
 import UserProfile from '../pages/UserProfile';
 import Admin from '../pages/Admin';
+import AdminLogin from '../pages/AdminLogin';
 import Alerts from '../pages/Alerts';
 import PrivateRoute from './PrivateRoute';
 import RoleRoute from './RoleRoute';
@@ -27,6 +28,7 @@ const AppRoutes = () => {
       <Route path="/" element={<Onboarding />} />
       <Route path="/login" element={<Login />} />
       <Route path="/login/vetted" element={<VettedLogin />} />
+      <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/otp-verification" element={<OtpVerification />} />
       <Route path="/signup" element={<SignUp />} />
       <Route path="/signup/vetted" element={<VettedRegistration />} />

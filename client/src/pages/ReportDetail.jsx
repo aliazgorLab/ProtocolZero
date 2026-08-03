@@ -4,6 +4,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import axiosInstance from '../api/axiosInstance';
 import { useToast } from '../context/ToastContext';
 import { updateUser } from '../features/auth/authSlice';
+import { RESOURCE_TAXONOMY } from '../constants/resources';
 
 const ReportDetail = () => {
   const { id } = useParams();
@@ -17,6 +18,12 @@ const ReportDetail = () => {
   const [commentText, setCommentText] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
   const [submittingVictim, setSubmittingVictim] = useState(false);
+
+  // Asset Commitment State for ResponseTeam
+  const [showCommitModal, setShowCommitModal] = useState(false);
+  const [selectedCommitItem, setSelectedCommitItem] = useState(RESOURCE_TAXONOMY[0].id);
+  const [commitQuantity, setCommitQuantity] = useState(1);
+  const [submittingCommitment, setSubmittingCommitment] = useState(false);
 
   useEffect(() => {
     const fetchReportDetail = async () => {
@@ -40,17 +47,16 @@ const ReportDetail = () => {
   }, [id]);
 
   const handleVote = async (voteType) => {
+    if (report?.status === 'closed') {
+      showToast("Cannot vote on a closed report.", "warning");
+      return;
+    }
+
     try {
-      const res = await axiosInstance.patch(`/reports/${id}/vote`, {
-        type: voteType,
-        vote: voteType,
-      });
-      if (res.data) {
-        showToast("Vote recorded!", "success");
-        const updated = await axiosInstance.get(`/reports/${id}`);
-        if (updated.data?.data) {
-          setReport(updated.data.data);
-        }
+      const res = await axiosInstance.patch(`/reports/${id}/vote`, { vote: voteType });
+      if (res.data?.data) {
+        setReport(res.data.data);
+        showToast(`Vote recorded!`, "success");
       }
     } catch (err) {
       console.error("Failed to vote:", err);
@@ -59,6 +65,11 @@ const ReportDetail = () => {
   };
 
   const handleCommentSubmit = async () => {
+    if (report?.status === 'closed') {
+      showToast("Cannot comment on a closed report.", "warning");
+      return;
+    }
+
     const trimmed = commentText.trim();
     if (!trimmed) return;
 
@@ -79,6 +90,11 @@ const ReportDetail = () => {
   };
 
   const handleAttachVictim = async () => {
+    if (report?.status === 'closed') {
+      showToast("Cannot register as victim on a closed report.", "warning");
+      return;
+    }
+
     setSubmittingVictim(true);
 
     const submitVictimPayload = async (payload) => {
@@ -137,6 +153,43 @@ const ReportDetail = () => {
     }
   };
 
+  const handleCommitResourceSubmit = async (e) => {
+    e.preventDefault();
+    if (report?.status === 'closed') {
+      showToast("Cannot commit assets to a closed report.", "warning");
+      return;
+    }
+
+    if (commitQuantity <= 0) {
+      showToast("Quantity must be greater than 0.", "warning");
+      return;
+    }
+
+    try {
+      setSubmittingCommitment(true);
+      const payload = {
+        items: [
+          {
+            itemId: selectedCommitItem,
+            quantity: Number(commitQuantity),
+          }
+        ]
+      };
+
+      const res = await axiosInstance.patch(`/reports/${id}/resources`, payload);
+      if (res.data?.data) {
+        setReport(prev => ({ ...prev, resourcesCommitted: res.data.data }));
+        setShowCommitModal(false);
+        showToast("Official asset committed to incident!", "success");
+      }
+    } catch (err) {
+      console.error("Failed to commit asset:", err);
+      showToast(err.response?.data?.message || "Failed to commit asset.", "error");
+    } finally {
+      setSubmittingCommitment(false);
+    }
+  };
+
   const handleBack = () => {
     navigate(-1);
   };
@@ -156,7 +209,7 @@ const ReportDetail = () => {
         <span className="material-symbols-outlined text-[64px] text-outline mb-3">error_med</span>
         <h2 className="text-xl font-bold">Report Not Found</h2>
         <p className="text-xs text-on-surface-variant mt-1 mb-4">The requested report ID does not exist or has been removed.</p>
-        <button onClick={handleBack} className="bg-primary text-white text-xs font-bold px-4 py-2 rounded-lg">
+        <button onClick={handleBack} className="bg-primary text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer">
           Return Back
         </button>
       </div>
@@ -164,6 +217,7 @@ const ReportDetail = () => {
   }
 
   const isMajor = report.type === 'major';
+  const isClosed = report.status === 'closed';
   const upvotes = report.vote?.upvote || 0;
   const downvotes = report.vote?.downvote || 0;
   const netScore = upvotes - downvotes;
@@ -176,6 +230,7 @@ const ReportDetail = () => {
 
   const isAttachedToOtherReport = currentUser?.victimReportID && currentUser.victimReportID.toString() !== report._id?.toString();
   const isVettedResponder = ['Reporter', 'ResponseTeam', 'Admin', 'SuperAdmin'].includes(currentUser?.accountType);
+  const isResponseTeam = currentUser?.accountType === 'ResponseTeam';
 
   return (
     <div className="min-h-screen bg-background text-on-background pb-24 pt-14">
@@ -184,7 +239,7 @@ const ReportDetail = () => {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
           <button
             onClick={handleBack}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-outline-variant/30 bg-surface text-on-surface hover:bg-surface-container transition"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-outline-variant/30 bg-surface text-on-surface hover:bg-surface-container transition cursor-pointer"
           >
             <span className="material-symbols-outlined text-[20px]">arrow_back</span>
           </button>
@@ -200,24 +255,46 @@ const ReportDetail = () => {
 
       <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[1.2fr_0.8fr]">
         <section className="space-y-6">
-          <article className="overflow-hidden rounded-3xl border border-outline-variant/30 bg-surface shadow-sm">
+          
+          {/* Prominent Banner for Closed Reports */}
+          {isClosed && (
+            <div className="rounded-2xl bg-slate-900 text-slate-100 p-4 flex items-center gap-3 border border-slate-700 shadow-md animate-in fade-in duration-300">
+              <span className="material-symbols-outlined text-rose-400 text-3xl shrink-0">block</span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-rose-400">INCIDENT REPORT CLOSED & INACTIVE</p>
+                <p className="text-xs text-slate-300 mt-0.5 font-medium leading-relaxed">
+                  This report has been permanently closed (resolved or flagged as false). Voting, commenting, victim registration, and responder asset commitments are disabled.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <article className={`overflow-hidden rounded-3xl border shadow-sm ${
+            isClosed ? 'border-slate-300 bg-slate-50/60' : 'border-outline-variant/30 bg-surface'
+          }`}>
             {/* Header info banner */}
             <div className="p-6 bg-surface-container border-b border-outline-variant/30">
               <div className="flex flex-wrap gap-2 mb-3">
                 <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${
-                  isMajor ? 'bg-alert-red text-white' : 'bg-primary-container text-on-primary-container'
+                  isClosed ? 'bg-slate-700 text-white' : isMajor ? 'bg-alert-red text-white' : 'bg-primary-container text-on-primary-container'
                 }`}>
-                  {isMajor ? 'MAJOR DISASTER' : 'MINOR INCIDENT'}
+                  {isClosed ? 'CLOSED REPORT' : isMajor ? 'MAJOR DISASTER' : 'MINOR INCIDENT'}
                 </span>
                 <span className="rounded-full bg-surface-container-highest px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border border-outline-variant/30">
                   {report.category}
                 </span>
-                <span className="rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-3 py-1 text-[10px] font-bold uppercase tracking-wider">
-                  {report.status || 'Active'}
+                <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider border ${
+                  isClosed 
+                    ? 'bg-slate-800 text-slate-100 border-slate-700' 
+                    : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                }`}>
+                  {isClosed ? 'CLOSED / RESOLVED' : (report.status || 'Active')}
                 </span>
               </div>
 
-              <h2 className="text-2xl font-bold text-on-surface">{report.category} Report</h2>
+              <h2 className={`text-2xl font-bold ${isClosed ? 'text-slate-600 line-through' : 'text-on-surface'}`}>
+                {report.category} Report
+              </h2>
               <p className="text-xs font-medium text-on-surface-variant mt-1">
                 Reported {report.createdAt ? new Date(report.createdAt).toLocaleString() : 'Recently'}
               </p>
@@ -260,20 +337,32 @@ const ReportDetail = () => {
 
               {/* Voting Action Bar */}
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3">Community Verification</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3">
+                  Community Verification {isClosed && '(Disabled - Report Closed)'}
+                </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <button
                     type="button"
+                    disabled={isClosed}
                     onClick={() => handleVote('upvote')}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 font-bold text-emerald-600 transition hover:bg-emerald-500/20 active:scale-95"
+                    className={`inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 font-bold transition active:scale-95 ${
+                      isClosed 
+                        ? 'border-slate-300 bg-slate-100 text-slate-400 cursor-not-allowed' 
+                        : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 cursor-pointer'
+                    }`}
                   >
                     <span className="material-symbols-outlined text-[18px]">arrow_upward</span>
                     Upvote ({upvotes})
                   </button>
                   <button
                     type="button"
+                    disabled={isClosed}
                     onClick={() => handleVote('downvote')}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-bold text-rose-600 transition hover:bg-rose-500/20 active:scale-95"
+                    className={`inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 font-bold transition active:scale-95 ${
+                      isClosed 
+                        ? 'border-slate-300 bg-slate-100 text-slate-400 cursor-not-allowed' 
+                        : 'border-rose-500/30 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 cursor-pointer'
+                    }`}
                   >
                     <span className="material-symbols-outlined text-[18px]">arrow_downward</span>
                     Downvote ({downvotes})
@@ -281,6 +370,105 @@ const ReportDetail = () => {
                 </div>
               </div>
             </div>
+          </article>
+
+          {/* Required Supplies Taxonomy Card */}
+          <article className="rounded-3xl border border-primary/30 bg-surface p-6 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between gap-4 mb-4 pb-3 border-b border-outline-variant/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <span className="material-symbols-outlined text-2xl">inventory_2</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-on-surface">Required Emergency Supplies</h3>
+                  <p className="text-xs text-on-surface-variant">Standardized resource catalog items requested for this site</p>
+                </div>
+              </div>
+            </div>
+
+            {(!report.resourcesNeeded || report.resourcesNeeded.length === 0) ? (
+              <p className="text-xs text-on-surface-variant text-center py-4 bg-surface-container-lowest rounded-2xl border border-outline-variant/20 italic">
+                No specific supplies requested for this incident.
+              </p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {report.resourcesNeeded.map((resItem, idx) => {
+                  const tax = RESOURCE_TAXONOMY.find(t => t.id === (resItem.itemId || resItem.id)) || {};
+                  return (
+                    <div key={idx} className="p-3.5 rounded-2xl border border-primary/20 bg-surface-container-lowest flex items-center justify-between">
+                      <div>
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded">
+                          {resItem.category || tax.category || 'Supplies'}
+                        </span>
+                        <h4 className="text-sm font-bold text-on-surface mt-1">{resItem.itemName || tax.name || 'Resource Item'}</h4>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-base font-black text-primary">{resItem.quantity}</span>
+                        <span className="text-[10px] font-bold text-on-surface-variant block uppercase tracking-wider">{resItem.unit || tax.defaultUnit || 'units'}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </article>
+
+          {/* Official Assets Committed Panel (Response Team Logistics) */}
+          <article className="rounded-3xl border border-emerald-500/30 bg-surface p-6 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between gap-4 mb-4 pb-3 border-b border-outline-variant/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-2xl">local_shipping</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-on-surface">Official Assets Committed</h3>
+                  <p className="text-xs text-on-surface-variant">Response Team vehicles and heavy equipment deployed to scene</p>
+                </div>
+              </div>
+
+              {isResponseTeam && !isClosed && (
+                <button
+                  type="button"
+                  onClick={() => setShowCommitModal(true)}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider transition active:scale-95 shadow-md flex items-center gap-1 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-base">add</span>
+                  Commit Asset
+                </button>
+              )}
+            </div>
+
+            {(!report.resourcesCommitted || report.resourcesCommitted.length === 0) ? (
+              <p className="text-xs text-on-surface-variant text-center py-4 bg-surface-container-lowest rounded-2xl border border-outline-variant/20 italic">
+                No official response assets committed yet.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {report.resourcesCommitted.map((committed, idx) => {
+                  const tax = RESOURCE_TAXONOMY.find(t => t.id === (committed.itemId || committed.id)) || {};
+                  return (
+                    <div key={idx} className="p-4 rounded-2xl border border-emerald-500/20 bg-surface-container-lowest flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+                          <span className="material-symbols-outlined text-xl">shield</span>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-bold text-on-surface">{committed.itemName || tax.name}</h4>
+                            <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded uppercase">
+                              {committed.quantity} {committed.unit || tax.defaultUnit}
+                            </span>
+                          </div>
+                          <p className="text-xs text-on-surface-variant mt-0.5">
+                            Provider: <span className="font-bold text-on-surface">{committed.providerId?.name || 'Response Unit'}</span> • {committed.createdAt ? new Date(committed.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Deployed'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </article>
 
           {/* Victim Registration & Rescue Roster Section */}
@@ -315,7 +503,7 @@ const ReportDetail = () => {
                     type="button"
                     disabled={submittingVictim}
                     onClick={handleDetachVictim}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-emerald-700 active:scale-95 disabled:opacity-50 shrink-0"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-emerald-700 active:scale-95 disabled:opacity-50 shrink-0 cursor-pointer"
                   >
                     {submittingVictim ? 'Processing...' : 'Mark Myself Safe'}
                   </button>
@@ -333,11 +521,15 @@ const ReportDetail = () => {
                   </div>
                   <button
                     type="button"
-                    disabled={submittingVictim || report.status === 'closed'}
+                    disabled={submittingVictim || isClosed}
                     onClick={handleAttachVictim}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-alert-red px-6 py-3 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-alert-red/90 active:scale-95 disabled:opacity-50 shrink-0 shadow-lg shadow-alert-red/20"
+                    className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-xs font-bold uppercase tracking-wider text-white transition shrink-0 ${
+                      isClosed 
+                        ? 'bg-slate-400 cursor-not-allowed' 
+                        : 'bg-alert-red hover:bg-alert-red/90 active:scale-95 cursor-pointer shadow-lg shadow-alert-red/20'
+                    }`}
                   >
-                    {submittingVictim ? 'Attaching...' : 'I Am A Victim (Attach Me)'}
+                    {isClosed ? 'Report Closed' : submittingVictim ? 'Attaching...' : 'I Am A Victim (Attach Me)'}
                   </button>
                 </div>
               )}
@@ -347,7 +539,7 @@ const ReportDetail = () => {
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3">Registered Victims Roster</p>
               {(!report.victims || report.victims.length === 0) ? (
-                <p className="text-xs text-on-surface-variant text-center py-6 bg-surface-container-lowest rounded-2xl border border-outline-variant/20">
+                <p className="text-xs text-on-surface-variant text-center py-6 bg-surface-container-lowest rounded-2xl border border-outline-variant/20 italic">
                   No victims currently registered on this report.
                 </p>
               ) : (
@@ -423,19 +615,26 @@ const ReportDetail = () => {
 
             <div className="space-y-3 mb-6">
               <textarea
+                disabled={isClosed}
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Post a field update or message..."
+                placeholder={isClosed ? "Comments disabled for closed reports." : "Post a field update or message..."}
                 rows="3"
-                className="w-full rounded-2xl border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary text-on-surface placeholder:text-outline"
+                className={`w-full rounded-2xl border px-4 py-3 text-sm outline-none ${
+                  isClosed 
+                    ? 'bg-slate-100 text-slate-400 border-slate-300 cursor-not-allowed placeholder:text-slate-400' 
+                    : 'bg-surface-container-lowest text-on-surface border-outline-variant/30 focus:ring-2 focus:ring-primary placeholder:text-outline'
+                }`}
               />
               <button
                 type="button"
-                disabled={submittingComment}
+                disabled={submittingComment || isClosed}
                 onClick={handleCommentSubmit}
-                className="inline-flex w-full items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-primary/90 active:scale-95 disabled:opacity-50"
+                className={`inline-flex w-full items-center justify-center rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition ${
+                  isClosed ? 'bg-slate-400 cursor-not-allowed' : 'bg-primary hover:bg-primary/90 active:scale-95 cursor-pointer'
+                }`}
               >
-                {submittingComment ? 'Posting...' : 'Post Update'}
+                {isClosed ? 'Comments Disabled' : submittingComment ? 'Posting...' : 'Post Update'}
               </button>
             </div>
 
@@ -459,6 +658,75 @@ const ReportDetail = () => {
           </article>
         </aside>
       </main>
+
+      {/* ResponseTeam Commit Asset Modal */}
+      {showCommitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-surface rounded-3xl border border-outline-variant/30 p-6 max-w-md w-full shadow-2xl animate-in fade-in duration-200">
+            <div className="flex items-center justify-between mb-4 border-b border-outline-variant/20 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-emerald-600">local_shipping</span>
+                <h3 className="text-lg font-bold text-on-surface">Commit Official Asset</h3>
+              </div>
+              <button 
+                onClick={() => setShowCommitModal(false)}
+                className="text-on-surface-variant hover:text-on-surface"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleCommitResourceSubmit} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2 block">
+                  Select Equipment / Vehicle
+                </label>
+                <select
+                  value={selectedCommitItem}
+                  onChange={(e) => setSelectedCommitItem(e.target.value)}
+                  className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-3 text-sm font-bold text-on-surface outline-none focus:border-primary"
+                >
+                  {RESOURCE_TAXONOMY.map(item => (
+                    <option key={item.id} value={item.id}>
+                      [{item.category}] {item.name} ({item.defaultUnit})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2 block">
+                  Deployment Quantity
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={commitQuantity}
+                  onChange={(e) => setCommitQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-3 text-sm font-bold text-on-surface outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCommitModal(false)}
+                  className="flex-1 py-3 rounded-xl border border-outline-variant/30 text-xs font-bold uppercase tracking-wider hover:bg-surface-container transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingCommitment}
+                  className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider transition disabled:opacity-50"
+                >
+                  {submittingCommitment ? 'Deploying...' : 'Deploy Asset'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

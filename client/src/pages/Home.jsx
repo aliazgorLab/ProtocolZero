@@ -65,7 +65,7 @@ const Home = () => {
 
   // Valid reports for map visualization
   const validReports = useMemo(() => {
-    return reports.filter((r) => isValidCoordinate(r.location));
+    return reports.filter((r) => r.status !== 'closed' && isValidCoordinate(r.location));
   }, [reports]);
 
   // Filtered and Sorted reports for the Feed
@@ -387,26 +387,27 @@ const Home = () => {
           filteredReports.map((report) => {
             const config = getDisasterConfig(report.category);
             const isMajor = report.type === 'major';
+            const isClosed = report.status === 'closed';
 
             return (
               <article
                 key={report._id || report.postId}
                 className={`bg-white border-l-4 rounded-xl shadow-sm overflow-hidden flex flex-col transition-transform duration-200 ${
-                  isMajor ? 'border-alert-red' : 'border-primary'
+                  isClosed ? 'border-slate-500 opacity-85 bg-slate-50/50' : isMajor ? 'border-alert-red' : 'border-primary'
                 }`}
               >
                 {/* Header Info */}
                 <div className="p-4 flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-on-surface shrink-0 border border-outline-variant">
-                      <span className="material-symbols-outlined text-[20px]" style={{ color: config.hex }}>
+                      <span className="material-symbols-outlined text-[20px]" style={{ color: isClosed ? '#64748b' : config.hex }}>
                         {config.icon}
                       </span>
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-bold text-on-surface text-sm">{report.issuerId?.name || 'Reporter'}</span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${config.badgeBg}`}>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${isClosed ? 'bg-slate-200 text-slate-700 border-slate-300' : config.badgeBg}`}>
                           {report.category || 'Incident'}
                         </span>
                       </div>
@@ -416,10 +417,14 @@ const Home = () => {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <div className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
-                      isMajor ? 'bg-alert-red text-white' : 'bg-primary-container text-on-primary-container'
+                    <div className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                      isClosed 
+                        ? 'bg-slate-800 text-slate-100 shadow-sm' 
+                        : isMajor 
+                        ? 'bg-alert-red text-white' 
+                        : 'bg-primary-container text-on-primary-container'
                     }`}>
-                      {isMajor ? 'MAJOR DISASTER' : 'STANDARD'}
+                      {isClosed ? 'CLOSED / RESOLVED' : isMajor ? 'MAJOR DISASTER' : 'STANDARD'}
                     </div>
                   </div>
                 </div>
@@ -427,7 +432,9 @@ const Home = () => {
                 {/* Content Body */}
                 <div className="px-4 pb-4">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <h3 className="font-bold text-on-surface text-base">{report.category} Incident</h3>
+                    <h3 className={`font-bold text-base ${isClosed ? 'text-slate-600 line-through' : 'text-on-surface'}`}>
+                      {report.category} Incident
+                    </h3>
                   </div>
                   <p className="text-on-surface-variant text-sm line-clamp-3 mb-3">{report.description}</p>
                 </div>
@@ -440,9 +447,11 @@ const Home = () => {
                   </div>
                   <button 
                     onClick={() => navigate(`/reports/${report.postId || report._id}`)}
-                    className="bg-primary hover:bg-primary-container text-white px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider active:scale-95 transition-transform cursor-pointer"
+                    className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider active:scale-95 transition-transform cursor-pointer ${
+                      isClosed ? 'bg-slate-700 hover:bg-slate-800 text-white' : 'bg-primary hover:bg-primary-container text-white'
+                    }`}
                   >
-                    VIEW REPORT
+                    {isClosed ? 'VIEW REPORT (CLOSED)' : 'VIEW REPORT'}
                   </button>
                 </div>
               </article>

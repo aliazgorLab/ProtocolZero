@@ -1,26 +1,60 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
 import { logout, updateUser, updateLiveLocation } from '../features/auth/authSlice';
 import axiosInstance from '../api/axiosInstance';
 import CreateReportBox from '../components/CreateReportBox';
 import { useToast } from '../context/ToastContext';
+import { RESOURCE_TAXONOMY } from '../constants/resources';
 
 const UserProfile = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { user: currentUser } = useSelector((state) => state.auth);
+
   const [toggling2FA, setToggling2FA] = useState(false);
+  const [togglingVolunteer, setTogglingVolunteer] = useState(false);
+  const [savingAddresses, setSavingAddresses] = useState(false);
+  const [savingInventory, setSavingInventory] = useState(false);
   const [gpsActive, setGpsActive] = useState(false);
-  const [resources, setResources] = useState([
-    { name: 'Fire Trucks', quantity: 3, unit: 'units' },
-    { name: 'Water Hoses', quantity: 10, unit: 'units' }
-  ]);
-  const [isEditingResources, setIsEditingResources] = useState(false);
+
+  // Address & Map State
+  const [homeAddress, setHomeAddress] = useState(currentUser?.homeAddress || '');
+  const [homeCoords, setHomeCoords] = useState(() => {
+    if (currentUser?.homeAddressGps?.coordinates) {
+      return { lat: currentUser.homeAddressGps.coordinates[1], lng: currentUser.homeAddressGps.coordinates[0] };
+    }
+    return { lat: 22.3569, lng: 91.7832 }; // Default Chittagong
+  });
+
+  const [currentAddress, setCurrentAddress] = useState(currentUser?.currentAddress || '');
+  const [currentCoords, setCurrentCoords] = useState(() => {
+    if (currentUser?.currentAddressGps?.coordinates || currentUser?.gps?.coordinates) {
+      const coords = currentUser?.currentAddressGps?.coordinates || currentUser?.gps?.coordinates;
+      return { lat: coords[1], lng: coords[0] };
+    }
+    return { lat: 22.3569, lng: 91.7832 };
+  });
+
+  const [activeAddressTab, setActiveAddressTab] = useState('home'); // 'home' or 'current'
+
+  // Volunteer / ResponseTeam Inventory State
+  const [inventory, setInventory] = useState(() => {
+    if (Array.isArray(currentUser?.inventory) && currentUser.inventory.length > 0) {
+      return currentUser.inventory;
+    }
+    return [{ itemId: RESOURCE_TAXONOMY[0].id, quantity: 1, unit: RESOURCE_TAXONOMY[0].defaultUnit }];
+  });
+
   const [userReports, setUserReports] = useState([]);
   const [loadingUserReports, setLoadingUserReports] = useState(true);
 
-  const { user: currentUser } = useSelector((state) => state.auth);
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+  });
 
   useEffect(() => {
     const fetchUserReports = async () => {
@@ -28,7 +62,6 @@ const UserProfile = () => {
         setLoadingUserReports(true);
         const res = await axiosInstance.get('/reports');
         if (res.data?.data) {
-          // Filter reports belonging to current logged in user
           const myReports = res.data.data.filter(
             (r) => r.issuerId?._id === currentUser?._id || r.issuerId === currentUser?._id
           );
@@ -43,9 +76,22 @@ const UserProfile = () => {
 
     if (currentUser) {
       fetchUserReports();
+      setHomeAddress(currentUser.homeAddress || '');
+      setCurrentAddress(currentUser.currentAddress || '');
+      if (currentUser.homeAddressGps?.coordinates) {
+        setHomeCoords({ lat: currentUser.homeAddressGps.coordinates[1], lng: currentUser.homeAddressGps.coordinates[0] });
+      }
+      if (currentUser.currentAddressGps?.coordinates || currentUser.gps?.coordinates) {
+        const coords = currentUser.currentAddressGps?.coordinates || currentUser.gps?.coordinates;
+        setCurrentCoords({ lat: coords[1], lng: coords[0] });
+      }
+      if (Array.isArray(currentUser.inventory) && currentUser.inventory.length > 0) {
+        setInventory(currentUser.inventory);
+      }
     }
   }, [currentUser]);
 
+  // Handle 2FA Toggle
   const handleToggle2FA = async () => {
     if (toggling2FA) return;
     setToggling2FA(true);
@@ -63,28 +109,115 @@ const UserProfile = () => {
     }
   };
 
-  useEffect(() => {
-    if (navigator.permissions) {
-      navigator.permissions.query({ name: 'geolocation' }).then((result) => {
-        if (result.state === 'granted' && currentUser?.gps?.coordinates) {
-          setGpsActive(true);
-        } else {
-          setGpsActive(false);
-        }
-        
-        result.onchange = () => {
-          if (result.state === 'granted' && currentUser?.gps?.coordinates) {
-            setGpsActive(true);
-          } else {
-            setGpsActive(false);
-          }
+  // Handle Role Mode Toggle (User <-> Volunteer)
+  const handleToggleVolunteerMode = async () => {
+    if (togglingVolunteer) return;
+    setTogglingVolunteer(true);
+    try {
+      const res = await axiosInstance.patch('/users/toggle-volunteer');
+      if (res.data?.success && res.data?.data) {
+        dispatch(updateUser({ accountType: res.data.data.accountType }));
+        showToast(res.data.message || "Volunteer status updated!", "success");
+      }
+    } catch (err) {
+      console.error("Volunteer toggle failed:", err);
+      showToast(err.response?.data?.message || "Failed to toggle volunteer mode.", "error");
+    } finally {
+      setTogglingVolunteer(false);
+    }
+  };
+
+  // Handle Map Pin Click
+  const handleMapClick = (e) => {
+    const lat = e.latLng.lat();
+    const lng = e.latLng.lng();
+
+    if (activeAddressTab === 'home') {
+      setHomeCoords({ lat, lng });
+      setHomeAddress(`GeoPin: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      showToast("Home address coordinates pinned on map.", "info");
+    } else {
+      setCurrentCoords({ lat, lng });
+      setCurrentAddress(`GeoPin: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      showToast("Current address coordinates pinned on map.", "info");
+    }
+  };
+
+  // Save Addresses
+  const handleSaveAddresses = async (e) => {
+    e.preventDefault();
+    setSavingAddresses(true);
+    try {
+      const payload = {
+        homeAddress,
+        homeAddressGps: { type: 'Point', coordinates: [homeCoords.lng, homeCoords.lat] },
+        currentAddress,
+        currentAddressGps: { type: 'Point', coordinates: [currentCoords.lng, currentCoords.lat] },
+        gps: { type: 'Point', coordinates: [currentCoords.lng, currentCoords.lat] }
+      };
+
+      const res = await axiosInstance.patch('/users/profile', payload);
+      if (res.data?.success && res.data?.data) {
+        dispatch(updateUser(res.data.data));
+        showToast("Home and Current addresses saved successfully!", "success");
+      }
+    } catch (err) {
+      console.error("Save addresses failed:", err);
+      showToast(err.response?.data?.message || "Failed to save profile addresses.", "error");
+    } finally {
+      setSavingAddresses(false);
+    }
+  };
+
+  // Inventory Management
+  const addInventoryItem = () => {
+    const defaultTax = RESOURCE_TAXONOMY[0];
+    setInventory([...inventory, { itemId: defaultTax.id, quantity: 1, unit: defaultTax.defaultUnit }]);
+  };
+
+  const updateInventoryItem = (index, field, value) => {
+    setInventory(prev => prev.map((item, idx) => {
+      if (idx !== index) return item;
+      if (field === 'itemId') {
+        const tax = RESOURCE_TAXONOMY.find(t => t.id === value) || RESOURCE_TAXONOMY[0];
+        return { ...item, itemId: value, unit: tax.defaultUnit };
+      }
+      return { ...item, [field]: value };
+    }));
+  };
+
+  const removeInventoryItem = (index) => {
+    setInventory(inventory.filter((_, idx) => idx !== index));
+  };
+
+  const handleSaveInventory = async () => {
+    setSavingInventory(true);
+    try {
+      const formattedItems = inventory.map(item => {
+        const tax = RESOURCE_TAXONOMY.find(t => t.id === (item.itemId || item.id)) || RESOURCE_TAXONOMY[0];
+        return {
+          itemId: tax.id,
+          itemName: tax.name,
+          category: tax.category,
+          quantity: Math.max(1, Number(item.quantity) || 1),
+          unit: tax.defaultUnit
         };
       });
-    } else {
-      setGpsActive(Boolean(currentUser?.gps?.coordinates));
-    }
-  }, [currentUser]);
 
+      const res = await axiosInstance.patch('/users/profile', { inventory: formattedItems });
+      if (res.data?.success && res.data?.data) {
+        dispatch(updateUser({ inventory: res.data.data.inventory }));
+        showToast("Inventory stock updated!", "success");
+      }
+    } catch (err) {
+      console.error("Inventory save failed:", err);
+      showToast(err.response?.data?.message || "Failed to save inventory stock.", "error");
+    } finally {
+      setSavingInventory(false);
+    }
+  };
+
+  // Sync Live GPS
   const handleToggleGPS = () => {
     if (!navigator.geolocation) {
       showToast("Geolocation is not supported by your browser.", "warning");
@@ -95,292 +228,404 @@ const UserProfile = () => {
       async (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
-        
-        const gps = {
-          type: "Point",
-          coordinates: [lng, lat]
-        };
+
+        setCurrentCoords({ lat, lng });
+        setCurrentAddress(`Current GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+
+        const gps = { type: "Point", coordinates: [lng, lat] };
         try {
           await dispatch(updateLiveLocation(gps)).unwrap();
           setGpsActive(true);
-          showToast("GPS Location successfully updated and saved to your profile!", "success");
+          showToast("Live GPS coordinates updated and saved!", "success");
         } catch (err) {
           console.error("Failed to update live location:", err);
-          showToast("Location fetched, but failed to save to server.", "error");
+          showToast("Location fetched, but server save failed.", "error");
         }
       },
       (error) => {
         console.error("Location access denied or failed", error);
         setGpsActive(false);
-        if (error.code === error.PERMISSION_DENIED) {
-          showToast("Location access was denied. Please allow location access in your browser settings.", "warning");
-        } else {
-          showToast("Could not retrieve location. Please check your GPS signal.", "error");
-        }
+        showToast("Could not retrieve GPS location.", "error");
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
-  const displayUser = {
-    name: currentUser?.name || 'Protocol User',
-    email: currentUser?.email || 'N/A',
-    role: currentUser?.accountType || 'Citizen',
-    status: currentUser?.verificationStatus === 'verified' ? 'Verified Account' : 'Standard Account',
-    joined: currentUser?.createdAt ? new Date(currentUser.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short' }) : 'N/A',
-    clearance: currentUser?.score !== undefined ? Math.floor(currentUser.score / 10) : 1,
-    twoFactorEnabled: currentUser?.twoFactorEnabled || false
-  };
-
-  const isResponseTeam = displayUser.role === 'Response Team' || displayUser.role === 'ResponseTeam';
-
-  const addResource = () => setResources([...resources, { name: '', quantity: '', unit: '' }]);
-  const updateResource = (idx, field, val) => {
-    setResources(resources.map((res, i) => i === idx ? { ...res, [field]: val } : res));
-  };
-  const removeResource = (idx) => setResources(resources.filter((_, i) => i !== idx));
+  const accountType = currentUser?.accountType || 'User';
+  const verificationStatus = currentUser?.verificationStatus || 'unverified';
+  const userScore = currentUser?.score || 0;
+  const isFlagged = userScore <= -40;
+  const isVolunteer = accountType === 'Volunteer';
+  const isCitizenOrVolunteer = ['User', 'Volunteer'].includes(accountType);
+  const isVolunteerOrResponse = ['Volunteer', 'ResponseTeam', 'Admin', 'SuperAdmin'].includes(accountType);
 
   return (
-    <div className="bg-surface-container-lowest min-h-screen pb-24">
-      {/* Cover Photo Area */}
-      <div className="h-48 md:h-64 w-full bg-surface-container-high relative overflow-hidden">
-        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary via-surface to-background"></div>
+    <div className="bg-surface-container-lowest min-h-screen pb-24 text-on-surface">
+      
+      {/* Cover Photo Header */}
+      <div className="h-44 md:h-60 w-full bg-surface-container-high relative overflow-hidden">
+        <div className="absolute inset-0 opacity-30 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary via-surface to-background"></div>
       </div>
 
-      {/* Profile Header Area */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 relative pb-6 border-b border-outline-variant/30">
+      {/* Main Container */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 relative pb-6 border-b border-outline-variant/30">
         
-        {/* Profile Picture & Main Info Row */}
+        {/* Profile Picture & Identity Card */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-16 sm:-mt-20 mb-4 relative z-10">
-          
           <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
-            {/* Avatar */}
-            <div className="relative group w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-surface-container-lowest bg-surface-container-low overflow-hidden shadow-lg shrink-0">
+            <div className="relative group w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-surface-container-lowest bg-surface-container-low overflow-hidden shadow-xl shrink-0">
               <div className="w-full h-full bg-primary-container flex items-center justify-center">
                 <span className="material-symbols-outlined text-[64px] text-primary">person</span>
               </div>
             </div>
 
-            {/* Name & Title */}
-            <div className="pb-2">
-              <h1 className="text-3xl font-black text-on-surface flex items-center gap-2">
-                {displayUser.name}
-                {displayUser.status === 'Verified Account' && (
-                  <span className="material-symbols-outlined text-primary text-2xl" title="Verified">verified</span>
-                )}
-              </h1>
-              <p className="text-sm font-bold text-on-surface-variant uppercase tracking-wider">
-                {displayUser.role} • Lvl {displayUser.clearance} Clearance
+            <div className="pb-2 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-3xl font-black text-on-surface">{currentUser?.name || 'Protocol Zero User'}</h1>
+                
+                {/* Verification Status Chip */}
+                <span className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest border ${
+                  verificationStatus === 'verified'
+                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                    : verificationStatus === 'pending'
+                    ? 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+                    : 'bg-slate-200 text-slate-700 border-slate-300'
+                }`}>
+                  {verificationStatus.toUpperCase()}
+                </span>
+              </div>
+
+              <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+                {accountType} • {currentUser?.email || 'N/A'} • {currentUser?.phone || 'No Phone'}
               </p>
             </div>
           </div>
-          
-          {/* Action Buttons */}
+
           <div className="flex flex-col sm:flex-row gap-2 pb-2">
             <button 
               onClick={handleToggleGPS}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold shadow-sm transition-colors active:scale-95 ${
+              className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm transition-all active:scale-95 cursor-pointer ${
                 gpsActive 
-                  ? 'bg-primary-container text-on-primary-container hover:bg-primary-container/80' 
-                  : 'bg-primary text-on-primary hover:bg-primary/90'
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
+                  : 'bg-primary text-white hover:bg-primary/90'
               }`}
             >
-              <span className="material-symbols-outlined text-[20px]">{gpsActive ? 'my_location' : 'location_disabled'}</span>
-              {gpsActive ? 'Update Live GPS' : 'Activate Live GPS'}
+              <span className="material-symbols-outlined text-lg">{gpsActive ? 'my_location' : 'location_disabled'}</span>
+              {gpsActive ? 'GPS Active (Sync)' : 'Sync Live GPS'}
             </button>
           </div>
         </div>
-        
-        {/* Bio / Stats */}
-        <div className="mt-2 text-sm text-on-surface">
-          <div className="flex flex-wrap gap-4 text-xs font-medium text-on-surface-variant uppercase tracking-wider">
-            <span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">calendar_month</span> Joined {displayUser.joined}</span>
-            <span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">mail</span> {displayUser.email}</span>
-            <span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">description</span> {userReports.length} Reports Submitted</span>
+
+        {/* Low-Trust Warning Banner */}
+        {isFlagged && (
+          <div className="mt-4 rounded-2xl bg-rose-950 text-rose-100 p-4 border border-rose-800 flex items-center gap-3 shadow-lg">
+            <span className="material-symbols-outlined text-rose-400 text-3xl shrink-0">warning</span>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-rose-400">Account Reliability Flagged ({userScore})</p>
+              <p className="text-xs text-rose-200 mt-0.5 font-medium leading-relaxed">
+                Your reliability score has dropped below -40 due to unverified or false incident reports. Your account is flagged for moderator audit.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Main Content Layout */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 flex flex-col md:flex-row gap-6">
+      {/* Grid Content Layout */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6">
         
-        {/* Left Column (Account Info & Settings) */}
-        <div className="w-full md:w-[350px] shrink-0 space-y-4">
+        <div className="space-y-6">
           
-          <div className="bg-surface-container rounded-xl shadow-sm overflow-hidden border border-outline-variant/30">
-            <div className="p-4 border-b border-outline-variant/30">
-              <h2 className="text-lg font-bold text-on-surface">Account Info</h2>
-            </div>
-            <div className="p-4 space-y-4 text-sm text-on-surface">
-              <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined text-outline shrink-0">badge</span>
-                <span>Role: <strong className="font-bold">{displayUser.role}</strong></span>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined text-outline shrink-0">verified_user</span>
-                <span>Status: <strong className="font-bold text-primary">{displayUser.status}</strong></span>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined text-outline shrink-0">my_location</span>
-                <span>GPS Status: <strong className="font-bold">{gpsActive ? 'Synchronized' : 'Inactive'}</strong></span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-surface-container rounded-xl shadow-sm overflow-hidden border border-outline-variant/30">
-            <div className="p-4 border-b border-outline-variant/30">
-              <h2 className="text-lg font-bold text-on-surface">Security & 2FA</h2>
-            </div>
-            <div className="divide-y divide-outline-variant/20 flex flex-col">
-              <div className="flex items-center justify-between p-4 hover:bg-surface-container-high transition-colors">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-on-surface-variant">security</span>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">Two-Factor OTP</span>
-                  </div>
+          {/* Saved Addresses Card (Interactive Google Map) */}
+          <article className="bg-surface border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-4 mb-4 pb-3 border-b border-outline-variant/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                  <span className="material-symbols-outlined text-2xl">home_pin</span>
                 </div>
-                <button 
-                  onClick={handleToggle2FA}
-                  disabled={toggling2FA}
-                  className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors min-w-[70px] text-center ${
-                    displayUser.twoFactorEnabled 
-                      ? 'bg-primary text-white hover:bg-primary/95' 
-                      : 'bg-surface-container-highest text-on-surface hover:bg-outline-variant'
+                <div>
+                  <h3 className="text-lg font-bold text-on-surface">Saved Locations & Addresses</h3>
+                  <p className="text-xs text-on-surface-variant">Set your Home Address and Current Address for emergency dispatch</p>
+                </div>
+              </div>
+
+              <div className="flex gap-1 bg-surface-container p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setActiveAddressTab('home')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
+                    activeAddressTab === 'home' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
                   }`}
                 >
-                  {toggling2FA ? '...' : displayUser.twoFactorEnabled ? 'Enabled' : 'Disabled'}
+                  🏠 Home
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveAddressTab('current')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
+                    activeAddressTab === 'current' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  📍 Current
                 </button>
               </div>
             </div>
-          </div>
 
-          {/* Response Team Resources Section */}
-          {isResponseTeam && (
-            <div className="bg-surface-container rounded-xl shadow-sm overflow-hidden border border-outline-variant/30">
-              <div className="p-4 border-b border-outline-variant/30 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">inventory</span>
-                  <h2 className="text-lg font-bold text-on-surface">Available Resources</h2>
+            <form onSubmit={handleSaveAddresses} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2 block">
+                    🏠 Home Address Text
+                  </label>
+                  <input
+                    type="text"
+                    value={homeAddress}
+                    onChange={(e) => setHomeAddress(e.target.value)}
+                    placeholder="Enter permanent home address..."
+                    className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-3 text-xs font-medium text-on-surface outline-none focus:border-primary"
+                  />
+                  <span className="text-[10px] text-on-surface-variant mt-1 block">
+                    Coordinates: [{homeCoords.lng.toFixed(5)}, {homeCoords.lat.toFixed(5)}]
+                  </span>
                 </div>
-                <button 
-                  onClick={() => setIsEditingResources(!isEditingResources)}
-                  className="text-primary text-xs font-bold uppercase tracking-wider bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full transition-colors"
-                >
-                  {isEditingResources ? 'Save' : 'Edit'}
-                </button>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2 block">
+                    📍 Current Address Text
+                  </label>
+                  <input
+                    type="text"
+                    value={currentAddress}
+                    onChange={(e) => setCurrentAddress(e.target.value)}
+                    placeholder="Enter current location address..."
+                    className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-3 text-xs font-medium text-on-surface outline-none focus:border-primary"
+                  />
+                  <span className="text-[10px] text-on-surface-variant mt-1 block">
+                    Coordinates: [{currentCoords.lng.toFixed(5)}, {currentCoords.lat.toFixed(5)}]
+                  </span>
+                </div>
               </div>
-              
-              <div className="p-4 space-y-3">
-                {!isEditingResources ? (
-                  resources.length > 0 ? (
-                    <div className="flex flex-col gap-2">
-                      {resources.map((res, i) => (
-                        <div key={i} className="flex justify-between items-center p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/30">
-                          <span className="font-bold text-sm text-on-surface">{res.name}</span>
-                          <span className="text-xs font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-1 rounded">
-                            {res.quantity} {res.unit}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-on-surface-variant font-medium italic text-center">No resources listed.</p>
-                  )
+
+              {/* Interactive Google Map Picker */}
+              <div className="h-64 bg-surface-container rounded-2xl border border-outline-variant/30 overflow-hidden relative shadow-inner">
+                {isLoaded ? (
+                  <GoogleMap
+                    mapContainerStyle={{ width: '100%', height: '100%' }}
+                    center={activeAddressTab === 'home' ? homeCoords : currentCoords}
+                    zoom={15}
+                    onClick={handleMapClick}
+                    options={{ disableDefaultUI: true, zoomControl: true }}
+                  >
+                    <Marker
+                      position={homeCoords}
+                      title="Home Address"
+                      label={{ text: "🏠 HOME", color: "#ffffff", fontWeight: "bold", fontSize: "10px" }}
+                    />
+                    <Marker
+                      position={currentCoords}
+                      title="Current Location"
+                      label={{ text: "📍 CURRENT", color: "#ffffff", fontWeight: "bold", fontSize: "10px" }}
+                    />
+                  </GoogleMap>
                 ) : (
-                  <div className="flex flex-col gap-3">
-                    {resources.map((res, i) => (
-                      <div key={i} className="flex gap-2 items-center">
-                        <input
-                          value={res.name}
-                          onChange={(e) => updateResource(i, 'name', e.target.value)}
-                          placeholder="Item"
-                          className="flex-1 min-w-0 rounded border border-primary/30 bg-surface-container-lowest px-2 py-1.5 text-xs text-on-surface outline-none focus:border-primary"
-                        />
-                        <input
-                          type="number"
-                          value={res.quantity}
-                          onChange={(e) => updateResource(i, 'quantity', e.target.value)}
-                          placeholder="Qty"
-                          className="w-14 shrink-0 rounded border border-primary/30 bg-surface-container-lowest px-2 py-1.5 text-xs text-on-surface outline-none focus:border-primary text-center"
-                        />
-                        <button 
-                          onClick={() => removeResource(i)}
-                          className="text-alert-red hover:bg-alert-red/10 p-1.5 rounded"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">delete</span>
-                        </button>
-                      </div>
-                    ))}
-                    <button 
-                      onClick={addResource}
-                      className="w-full flex items-center justify-center gap-1 text-xs font-bold uppercase text-primary border border-primary/30 border-dashed rounded-lg py-2 hover:bg-primary/5 transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">add</span>
-                      Add Resource
-                    </button>
+                  <div className="w-full h-full flex items-center justify-center text-xs text-on-surface-variant">
+                    Loading map picker...
                   </div>
                 )}
+                <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur text-white text-[10px] font-bold px-3 py-1 rounded-full pointer-events-none">
+                  Click map to set {activeAddressTab === 'home' ? 'Home (🏠)' : 'Current (📍)'} Pin
+                </div>
               </div>
-            </div>
-          )}
 
-        </div>
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={savingAddresses}
+                  className="px-6 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold uppercase tracking-wider transition active:scale-95 shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {savingAddresses ? 'Saving...' : 'Save Locations'}
+                </button>
+              </div>
+            </form>
+          </article>
 
-        {/* Right Column (Activity Log / Reports) */}
-        <div className="flex-1 space-y-4">
-          
-          <CreateReportBox />
-          
-          <div className="bg-surface-container rounded-xl shadow-sm p-4 border border-outline-variant/30 mb-4">
-            <h2 className="text-lg font-bold text-on-surface">My Incident Activity</h2>
-          </div>
-
-          {loadingUserReports ? (
-            <div className="text-center py-8 text-on-surface-variant">
-              <span className="material-symbols-outlined animate-spin text-[32px] mb-2">progress_activity</span>
-              <p className="text-xs">Loading activity...</p>
-            </div>
-          ) : userReports.length === 0 ? (
-            <div className="bg-surface-container rounded-xl p-8 text-center border border-outline-variant/30">
-              <span className="material-symbols-outlined text-4xl text-outline mb-2">history</span>
-              <h3 className="font-bold text-on-surface">No Activity Recorded</h3>
-              <p className="text-xs text-on-surface-variant mt-1">Reports submitted by you will appear here.</p>
-            </div>
-          ) : (
-            userReports.map((report) => (
-              <div 
-                key={report._id || report.postId}
-                className="bg-surface-container rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden"
-              >
-                <div className="p-4 flex items-start gap-3 border-b border-outline-variant/20">
-                  <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-primary text-sm">report</span>
+          {/* Volunteer & Response Team Inventory Card */}
+          {isVolunteerOrResponse && (
+            <article className="bg-surface border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+              <div className="flex items-center justify-between gap-4 mb-4 pb-3 border-b border-outline-variant/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
+                    <span className="material-symbols-outlined text-2xl">inventory</span>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm">
-                      Reported <span className="font-bold text-on-surface">{report.category}</span>
-                    </p>
-                    <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
-                      {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : 'Recently'}
-                    </p>
+                  <div>
+                    <h3 className="text-lg font-bold text-on-surface">Emergency Stock & Inventory</h3>
+                    <p className="text-xs text-on-surface-variant">Manage available supplies ready for field deployment</p>
                   </div>
                 </div>
-                <div className="p-4">
-                  <p className="text-sm text-on-surface-variant">{report.description}</p>
-                </div>
-                <div className="px-4 py-2 bg-surface-container-low border-t border-outline-variant/20 flex justify-end">
-                  <button 
-                    onClick={() => navigate(`/reports/${report.postId || report._id}`)}
-                    className="bg-primary text-white text-xs font-bold uppercase px-3 py-1 rounded"
+
+                <button
+                  type="button"
+                  onClick={addInventoryItem}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider transition active:scale-95 cursor-pointer flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-sm">add</span>
+                  Add Item
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {inventory.length === 0 ? (
+                  <p className="text-xs text-on-surface-variant text-center py-4 bg-surface-container-lowest rounded-2xl border border-outline-variant/20 italic">
+                    No emergency supplies currently listed in your inventory.
+                  </p>
+                ) : (
+                  inventory.map((item, idx) => {
+                    const currentTax = RESOURCE_TAXONOMY.find(t => t.id === (item.itemId || item.id)) || RESOURCE_TAXONOMY[0];
+                    return (
+                      <div key={idx} className="flex flex-wrap sm:flex-nowrap gap-2 items-center bg-surface-container-lowest p-2 rounded-xl border border-outline-variant/30">
+                        <select
+                          value={item.itemId || currentTax.id}
+                          onChange={(e) => updateInventoryItem(idx, 'itemId', e.target.value)}
+                          className="flex-1 rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface outline-none focus:border-primary"
+                        >
+                          {RESOURCE_TAXONOMY.map((tItem) => (
+                            <option key={tItem.id} value={tItem.id}>
+                              [{tItem.category}] {tItem.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.quantity || 0}
+                            onChange={(e) => updateInventoryItem(idx, 'quantity', Math.max(0, parseInt(e.target.value) || 0))}
+                            className="w-20 rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface outline-none focus:border-primary text-center"
+                          />
+                          <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 px-2 py-2 rounded-lg shrink-0">
+                            {currentTax.defaultUnit}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => removeInventoryItem(idx)}
+                          className="p-2 text-on-surface-variant hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition shrink-0 cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-lg">delete</span>
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    disabled={savingInventory}
+                    onClick={handleSaveInventory}
+                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider transition active:scale-95 shadow-md cursor-pointer disabled:opacity-50"
                   >
-                    View Report
+                    {savingInventory ? 'Saving Stock...' : 'Save Inventory Stock'}
                   </button>
                 </div>
               </div>
-            ))
+            </article>
           )}
 
+          {/* User Submitted Incidents */}
+          <article className="bg-surface border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-on-surface mb-4">My Submitted Incident Activity</h3>
+            {loadingUserReports ? (
+              <div className="text-center py-8 text-on-surface-variant">
+                <span className="material-symbols-outlined animate-spin text-[32px] mb-2 text-primary">progress_activity</span>
+                <p className="text-xs font-bold">Loading activity...</p>
+              </div>
+            ) : userReports.length === 0 ? (
+              <p className="text-xs text-on-surface-variant text-center py-6 bg-surface-container-lowest rounded-2xl border border-outline-variant/20 italic">
+                No incidents submitted yet.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {userReports.map((report) => (
+                  <div key={report._id || report.postId} className="p-4 rounded-2xl border border-outline-variant/20 bg-surface-container-lowest flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-on-surface">{report.category} Incident</h4>
+                      <p className="text-xs text-on-surface-variant mt-0.5 line-clamp-1">{report.description}</p>
+                    </div>
+                    <button
+                      onClick={() => navigate(`/reports/${report.postId || report._id}`)}
+                      className="px-3.5 py-1.5 bg-primary text-white text-xs font-bold uppercase rounded-xl hover:bg-primary/90 transition shrink-0 cursor-pointer"
+                    >
+                      View Report
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </article>
         </div>
+
+        {/* Right Sidebar (Role Toggle & Security) */}
+        <aside className="space-y-6">
+          
+          {/* Volunteer Mode Toggle Card */}
+          {isCitizenOrVolunteer && (
+            <article className="bg-surface border border-primary/30 rounded-3xl p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="material-symbols-outlined text-primary text-2xl">volunteer_activism</span>
+                <h3 className="text-base font-bold text-on-surface">Volunteer Mode</h3>
+              </div>
+              <p className="text-xs text-on-surface-variant mb-4 leading-relaxed">
+                Opt-in to receive broadcast emergency alerts and respond to regional incidents in real time.
+              </p>
+
+              <button
+                type="button"
+                disabled={togglingVolunteer}
+                onClick={handleToggleVolunteerMode}
+                className={`w-full py-3 rounded-2xl font-bold text-xs uppercase tracking-wider transition active:scale-95 cursor-pointer shadow-md flex items-center justify-center gap-2 ${
+                  isVolunteer
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                    : 'bg-primary hover:bg-primary/90 text-white'
+                }`}
+              >
+                <span className="material-symbols-outlined text-lg">
+                  {isVolunteer ? 'person_remove' : 'front_hand'}
+                </span>
+                {togglingVolunteer
+                  ? 'Updating...'
+                  : isVolunteer
+                  ? 'Opt-Out of Volunteer Mode'
+                  : 'Opt-In as Volunteer'}
+              </button>
+            </article>
+          )}
+
+          {/* Security & 2FA */}
+          <article className="bg-surface border border-outline-variant/30 rounded-3xl p-6 shadow-sm">
+            <h3 className="text-base font-bold text-on-surface mb-3">Security & 2FA</h3>
+            <div className="flex items-center justify-between p-3 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest">
+              <div>
+                <p className="text-xs font-bold text-on-surface">Email OTP 2FA</p>
+                <p className="text-[10px] text-on-surface-variant">Require OTP code at login</p>
+              </div>
+              <button
+                onClick={handleToggle2FA}
+                disabled={toggling2FA}
+                className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition cursor-pointer ${
+                  currentUser?.twoFactorEnabled
+                    ? 'bg-primary text-white'
+                    : 'bg-surface-container-highest text-on-surface'
+                }`}
+              >
+                {toggling2FA ? '...' : currentUser?.twoFactorEnabled ? 'Enabled' : 'Disabled'}
+              </button>
+            </div>
+          </article>
+
+        </aside>
+
       </div>
     </div>
   );

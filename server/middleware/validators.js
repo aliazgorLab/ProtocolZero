@@ -100,11 +100,41 @@ const validateCreateReport = [
   handleValidationErrors,
 ];
 
+const { RESOURCE_TAXONOMY } = require("../constants/resources");
+
 const validateResources = [
   body("items").isArray().withMessage("items must be an array."),
-  body("items.*.itemName").notEmpty().withMessage("itemName is required."),
-  body("items.*.quantity").isNumeric().withMessage("quantity must be a number."),
-  body("items.*.unit").notEmpty().withMessage("unit is required."),
+  body("items.*.itemId")
+    .notEmpty()
+    .withMessage("itemId is required.")
+    .custom((itemId) => {
+      const match = RESOURCE_TAXONOMY.find((r) => r.id === itemId);
+      if (!match) {
+        throw new Error(`Invalid resource itemId: '${itemId}'`);
+      }
+      return true;
+    }),
+  body("items.*.quantity")
+    .isInt({ min: 1 })
+    .withMessage("quantity must be a positive integer greater than 0."),
+  handleValidationErrors,
+];
+
+const validateResourcesNeeded = [
+  body("resourcesNeeded").isArray().withMessage("resourcesNeeded must be an array."),
+  body("resourcesNeeded.*.itemId")
+    .notEmpty()
+    .withMessage("itemId is required.")
+    .custom((itemId) => {
+      const match = RESOURCE_TAXONOMY.find((r) => r.id === itemId);
+      if (!match) {
+        throw new Error(`Invalid resource itemId: '${itemId}'`);
+      }
+      return true;
+    }),
+  body("resourcesNeeded.*.quantity")
+    .isInt({ min: 1 })
+    .withMessage("quantity must be a positive integer greater than 0."),
   handleValidationErrors,
 ];
 
@@ -130,5 +160,6 @@ module.exports = {
   validateVictimRegistration,
   validateCreateReport,
   validateResources,
+  validateResourcesNeeded,
   validateRegisterVetted,
 };
