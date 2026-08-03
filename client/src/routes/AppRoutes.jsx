@@ -14,6 +14,7 @@ import CreateReport from '../pages/CreateReport';
 import InteractiveMap from '../pages/InteractiveMap';
 import ResponseTeamDash from '../pages/ResponseTeamDash';
 import UserProfile from '../pages/UserProfile';
+import Admin from '../pages/Admin';
 import PrivateRoute from './PrivateRoute';
 import RoleRoute from './RoleRoute';
 
@@ -32,17 +33,7 @@ const AppRoutes = () => {
       {/* Private Routes */}
       <Route element={<PrivateRoute />}>
         <Route element={<RoleRoute requiredRoles={['Admin', 'SuperAdmin']} />}>
-          <Route
-            path="/admin"
-            element={
-              <div className="min-h-screen flex items-center justify-center px-6 text-center">
-                <div>
-                  <h1 className="text-2xl font-bold text-on-surface">Admin Area</h1>
-                  <p className="mt-2 text-on-surface-variant">This section is reserved for Admin and SuperAdmin accounts.</p>
-                </div>
-              </div>
-            }
-          />
+          <Route path="/admin" element={<Admin />} />
         </Route>
 
         {/* Standalone Dashboard for Response Team */}
