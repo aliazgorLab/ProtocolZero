@@ -1,68 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
-import { Link } from 'react-router-dom';
+import axiosInstance from '../api/axiosInstance';
+import { useToast } from '../context/ToastContext';
 
 const Alerts = () => {
   const { user: currentUser } = useSelector((state) => state.auth);
+  const { showToast } = useToast();
   
-  // Fake state for UI demonstration
   const [filter, setFilter] = useState('all');
-  
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      type: 'incident',
-      title: 'Major Incident Proximity Alert',
-      message: 'A Structure Fire has been reported 0.5km from your registered Home Address.',
-      time: '2 mins ago',
-      read: false,
-      icon: 'local_fire_department',
-      color: 'text-alert-red',
-      bg: 'bg-alert-red/10'
-    },
-    {
-      id: 2,
-      type: 'system',
-      title: 'Clearance Level Verified',
-      message: 'Your credentials have been validated by Command. You now have Level 4 Clearance.',
-      time: '1 hour ago',
-      read: false,
-      icon: 'verified_user',
-      color: 'text-primary',
-      bg: 'bg-primary/10'
-    },
-    {
-      id: 3,
-      type: 'incident',
-      title: 'Evacuation Route Update',
-      message: 'Safe Haven Delta route has been confirmed clear by Response Team Guardian-1.',
-      time: '3 hours ago',
-      read: true,
-      icon: 'route',
-      color: 'text-tertiary',
-      bg: 'bg-tertiary/10'
-    },
-    {
-      id: 4,
-      type: 'system',
-      title: 'Security Notice',
-      message: 'New login detected from a new IP address in Sector 7.',
-      time: 'Yesterday',
-      read: true,
-      icon: 'security',
-      color: 'text-[#FFB000]',
-      bg: 'bg-[#FFB000]/10'
-    }
-  ]);
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        setLoading(true);
+        const res = await axiosInstance.get('/notifications');
+        if (res.data?.data) {
+          setNotifications(res.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load notifications:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchNotifications();
+  }, []);
+
+  const markAllAsRead = async () => {
+    try {
+      // Optimistic update
+      setNotifications(notifications.map(n => ({ ...n, isRead: true })));
+      showToast("All notifications marked as read", "success");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const markSingleAsRead = async (id) => {
+    try {
+      await axiosInstance.patch(`/notifications/${id}/read`);
+      setNotifications(notifications.map(n => n._id === id ? { ...n, isRead: true } : n));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const filteredNotifications = notifications.filter(n => {
-    if (filter === 'unread') return !n.read;
-    if (filter === 'incident') return n.type === 'incident';
-    if (filter === 'system') return n.type === 'system';
+    if (filter === 'unread') return !n.isRead;
+    if (filter === 'incident') return n.type?.toLowerCase().includes('incident');
+    if (filter === 'system') return n.type?.toLowerCase().includes('system');
     return true;
   });
 
@@ -73,14 +62,16 @@ const Alerts = () => {
         <div className="px-4 py-4 flex items-center justify-between">
           <h2 className="text-xl font-bold text-on-surface flex items-center gap-2">
             <span className="material-symbols-outlined text-primary">notifications_active</span>
-            Alerts
+            Alerts & Notifications
           </h2>
-          <button 
-            onClick={markAllAsRead}
-            className="text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full transition-colors"
-          >
-            Mark all read
-          </button>
+          {notifications.length > 0 && (
+            <button 
+              onClick={markAllAsRead}
+              className="text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full transition-colors"
+            >
+              Mark all read
+            </button>
+          )}
         </div>
 
         {/* Filters */}
@@ -114,39 +105,48 @@ const Alerts = () => {
 
       {/* Notifications List */}
       <div className="px-4 py-4 space-y-3 max-w-4xl mx-auto">
-        {filteredNotifications.length === 0 ? (
+        {loading ? (
           <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
-            <span className="material-symbols-outlined text-6xl mb-4 opacity-50">notifications_off</span>
-            <p className="font-medium text-center">No alerts match your criteria.</p>
+            <span className="material-symbols-outlined text-4xl animate-spin mb-2">progress_activity</span>
+            <p className="text-sm font-medium">Syncing notification stream...</p>
+          </div>
+        ) : filteredNotifications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant bg-surface-container rounded-2xl border border-outline-variant/30 mt-4">
+            <span className="material-symbols-outlined text-6xl mb-4 opacity-40">notifications_off</span>
+            <p className="font-bold text-on-surface text-base">No active alerts</p>
+            <p className="text-xs text-on-surface-variant mt-1 text-center max-w-sm">Emergency broadcasts and system notices targeted to your zone will appear here.</p>
           </div>
         ) : (
           filteredNotifications.map((notif) => (
             <div 
-              key={notif.id}
-              className={`relative overflow-hidden rounded-xl border p-4 transition-all duration-300 ${
-                notif.read 
+              key={notif._id || notif.id}
+              onClick={() => markSingleAsRead(notif._id)}
+              className={`relative overflow-hidden rounded-xl border p-4 transition-all duration-300 cursor-pointer ${
+                notif.isRead 
                   ? 'bg-surface-container-lowest border-outline-variant/30 opacity-70' 
                   : 'bg-surface border-primary/30 shadow-[0_4px_20px_rgba(var(--primary),0.05)]'
               }`}
             >
-              {!notif.read && (
+              {!notif.isRead && (
                 <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.8)] animate-pulse"></div>
               )}
               
               <div className="flex gap-4">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${notif.bg}`}>
-                  <span className={`material-symbols-outlined ${notif.color}`}>{notif.icon}</span>
+                <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 bg-primary/10 text-primary">
+                  <span className="material-symbols-outlined">
+                    {notif.type === 'incident' ? 'local_fire_department' : 'notifications'}
+                  </span>
                 </div>
                 
                 <div className="flex-1 pr-6">
-                  <h3 className={`font-bold text-sm mb-1 ${notif.read ? 'text-on-surface-variant' : 'text-on-surface'}`}>
-                    {notif.title}
+                  <h3 className={`font-bold text-sm mb-1 ${notif.isRead ? 'text-on-surface-variant' : 'text-on-surface'}`}>
+                    {notif.title || 'System Alert'}
                   </h3>
                   <p className="text-sm text-on-surface-variant mb-2 leading-relaxed">
-                    {notif.message}
+                    {notif.message || notif.body}
                   </p>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/70">
-                    {notif.time}
+                    {notif.createdAt ? new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently'}
                   </p>
                 </div>
               </div>

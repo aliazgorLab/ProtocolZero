@@ -96,7 +96,7 @@ const VettedRegistration = () => {
                   <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1 group-focus-within:text-tertiary transition-colors" htmlFor="name">Full Legal Name</label>
                   <div className="relative flex items-center">
                     <span className="material-symbols-outlined absolute left-3 text-outline text-[20px] group-focus-within:text-tertiary transition-colors">badge</span>
-                    <input className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-transparent rounded-lg text-base focus:ring-2 focus:ring-tertiary focus:border-transparent transition-all outline-none" id="name" name="name" value={formData.name} onChange={handleInputChange} placeholder="John Doe" type="text" required />
+                    <input className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-transparent rounded-lg text-base focus:ring-2 focus:ring-tertiary focus:border-transparent transition-all outline-none" id="name" name="name" value={formData.name} onChange={handleInputChange} placeholder="Full Name" type="text" required />
                   </div>
                 </div>
 
@@ -104,7 +104,7 @@ const VettedRegistration = () => {
                   <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1 group-focus-within:text-tertiary transition-colors" htmlFor="phone">Mobile Phone Number</label>
                   <div className="relative flex items-center">
                     <span className="material-symbols-outlined absolute left-3 text-outline text-[20px] group-focus-within:text-tertiary transition-colors">phone_iphone</span>
-                    <input className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-transparent rounded-lg text-base focus:ring-2 focus:ring-tertiary focus:border-transparent transition-all outline-none" id="phone" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="+1 (555) 000-0000" type="tel" required />
+                    <input className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-transparent rounded-lg text-base focus:ring-2 focus:ring-tertiary focus:border-transparent transition-all outline-none" id="phone" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="+8801..." type="tel" required />
                   </div>
                 </div>
               </div>
@@ -114,14 +114,14 @@ const VettedRegistration = () => {
                   <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1 group-focus-within:text-tertiary transition-colors" htmlFor="email">Official Work Email</label>
                   <div className="relative flex items-center">
                     <span className="material-symbols-outlined absolute left-3 text-outline text-[20px] group-focus-within:text-tertiary transition-colors">alternate_email</span>
-                    <input className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-transparent rounded-lg text-base focus:ring-2 focus:ring-tertiary focus:border-transparent transition-all outline-none" id="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="agent@department.gov" type="email" required />
+                    <input className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-transparent rounded-lg text-base focus:ring-2 focus:ring-tertiary focus:border-transparent transition-all outline-none" id="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="official@organization.gov" type="email" required />
                   </div>
                 </div>
                 <div className="space-y-1.5 group">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1 group-focus-within:text-tertiary transition-colors" htmlFor="homeAddress">Residential Home Address</label>
                   <div className="relative flex items-center">
                     <span className="material-symbols-outlined absolute left-3 text-outline text-[20px] group-focus-within:text-tertiary transition-colors">home</span>
-                    <input className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-transparent rounded-lg text-base focus:ring-2 focus:ring-tertiary focus:border-transparent transition-all outline-none" id="homeAddress" name="homeAddress" value={formData.homeAddress} onChange={handleInputChange} placeholder="123 Sentinel Way, Metro City" type="text" required />
+                    <input className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-transparent rounded-lg text-base focus:ring-2 focus:ring-tertiary focus:border-transparent transition-all outline-none" id="homeAddress" name="homeAddress" value={formData.homeAddress} onChange={handleInputChange} placeholder="Street Address, City" type="text" required />
                   </div>
                 </div>
               </div>
