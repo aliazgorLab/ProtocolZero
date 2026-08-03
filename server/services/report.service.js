@@ -91,18 +91,14 @@ const getNearbyMinorReportRecipients = async (report, excludeUserId) => {
 };
 
 const findDuplicateReport = async (type, category, location) => {
-  const radiusMeters =
-    type === "major"
-      ? SYSTEM.DUPLICATE_RADIUS_MAJOR_M
-      : SYSTEM.DUPLICATE_RADIUS_MINOR_M;
-  const threeHoursAgo = new Date(
-    Date.now() - SYSTEM.DUPLICATE_WINDOW_HOURS * 60 * 60 * 1000,
-  );
+  const isMajor = type === "major";
+  const radiusMeters = isMajor
+    ? SYSTEM.DUPLICATE_RADIUS_MAJOR_M
+    : SYSTEM.DUPLICATE_RADIUS_MINOR_M;
 
-  return Report.findOne({
+  const query = {
     status: "active",
     category,
-    createdAt: { $gte: threeHoursAgo },
     location: {
       $near: {
         $geometry: {
@@ -112,7 +108,19 @@ const findDuplicateReport = async (type, category, location) => {
         $maxDistance: radiusMeters,
       },
     },
-  });
+  };
+
+  // Hybrid Time Window Engine:
+  // Minor Reports: 3-hour window (created at >= 3 hours ago)
+  // Major Reports: No time window; active until officially marked as closed
+  if (!isMajor) {
+    const threeHoursAgo = new Date(
+      Date.now() - SYSTEM.DUPLICATE_WINDOW_HOURS * 60 * 60 * 1000
+    );
+    query.createdAt = { $gte: threeHoursAgo };
+  }
+
+  return Report.findOne(query);
 };
 
 module.exports = {

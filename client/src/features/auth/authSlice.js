@@ -116,6 +116,74 @@ export const registerUser = createAsyncThunk(
   },
 );
 
+export const registerVettedUser = createAsyncThunk(
+  'auth/registerVetted',
+  async (vettedData, { rejectWithValue }) => {
+    try {
+      let idToken;
+      try {
+        const firebaseRes = await axios.post(
+          `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`,
+          {
+            email: vettedData.email,
+            password: vettedData.password,
+            returnSecureToken: true,
+          },
+        );
+        idToken = firebaseRes.data.idToken;
+      } catch (fbError) {
+        const fbCode = fbError.response?.data?.error?.message;
+        if (fbCode === 'EMAIL_EXISTS') {
+          try {
+            const loginRes = await axios.post(
+              `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`,
+              {
+                email: vettedData.email,
+                password: vettedData.password,
+                returnSecureToken: true,
+              }
+            );
+            idToken = loginRes.data.idToken;
+          } catch {
+            return rejectWithValue('An account with this email already exists in Firebase, but the password provided was incorrect. Please log in or use your correct password.');
+          }
+        } else if (fbCode === 'WEAK_PASSWORD') {
+          return rejectWithValue('Password should be at least 6 characters.');
+        } else if (fbCode === 'INVALID_EMAIL') {
+          return rejectWithValue('Invalid email address format.');
+        } else {
+          return rejectWithValue(fbError.response?.data?.error?.message || 'Firebase authentication failed.');
+        }
+      }
+
+      const backendRes = await axiosInstance.post(
+        '/auth/vetted-register',
+        {
+          name: vettedData.name,
+          phone: vettedData.phone,
+          email: vettedData.email,
+          accountType: vettedData.accountType,
+          role: vettedData.role,
+          nid: vettedData.nid,
+          face: vettedData.face,
+          officeName: vettedData.officeName,
+          officeAddress: vettedData.officeAddress,
+        },
+        {
+          headers: { Authorization: `Bearer ${idToken}` },
+        },
+      );
+
+      return { token: idToken, user: backendRes.data.data };
+    } catch (error) {
+      if (error.response) {
+        return rejectWithValue(error.response.data.message || error.response.data.error?.message || 'Vetted registration failed');
+      }
+      return rejectWithValue('Network error. Please check your connection.');
+    }
+  },
+);
+
 export const updateLiveLocation = createAsyncThunk(
   'auth/updateLiveLocation',
   async (gps, { getState, rejectWithValue }) => {
@@ -209,6 +277,22 @@ const authSlice = createSlice({
       .addCase(registerUser.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload || 'Registration failed.';
+      })
+      .addCase(registerVettedUser.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(registerVettedUser.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload.user;
+        state.token = action.payload.token;
+        state.isAuthenticated = true;
+        localStorage.setItem('token', action.payload.token);
+        localStorage.setItem('user', JSON.stringify(action.payload.user));
+      })
+      .addCase(registerVettedUser.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload || 'Vetted registration failed.';
       })
       .addCase(loginUser.pending, (state) => {
         state.isLoading = true;

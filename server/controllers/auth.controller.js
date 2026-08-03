@@ -129,10 +129,19 @@ exports.registerVettedProfessional = async (req, res) => {
     }
 
     // 3. Check for duplicate credentials in MongoDB
-    const targetEmail = (email || decodedToken.email || "").toLowerCase();
-    const existingUser = await User.findOne({
-      $or: [{ phone }, { email: targetEmail }, { nid }],
-    });
+    const targetEmail = (
+      email ||
+      decodedToken.email ||
+      `${phone.replace(/\+/g, "")}@protocolzero.local`
+    ).toLowerCase();
+
+    const conflictConditions = [
+      phone ? { phone } : null,
+      targetEmail ? { email: targetEmail } : null,
+      nid ? { nid } : null,
+    ].filter(Boolean);
+
+    const existingUser = await User.findOne({ $or: conflictConditions });
 
     if (existingUser) {
       return res.status(409).json({
@@ -146,7 +155,7 @@ exports.registerVettedProfessional = async (req, res) => {
     const newProfessional = await User.create({
       name,
       phone,
-      email: email || decodedToken.email || null,
+      email: targetEmail,
       accountType,
       nid,
       face,
@@ -186,18 +195,24 @@ exports.registerVettedProfessional = async (req, res) => {
       data: newProfessional,
     });
   } catch (error) {
-    console.error("[ERROR] Vetted Registration Failure:", error.message);
+    console.error("[ERROR] Vetted Registration Failure:", error);
     if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern || {})[0] || 'credentials';
       return res.status(409).json({
         success: false,
-        message:
-          "Conflict: A database record with these unique credentials already exists.",
+        message: `Conflict: An account with this ${field} already exists in the system.`,
+      });
+    }
+    if (error.name === 'ValidationError') {
+      const validationDetails = Object.values(error.errors).map(err => err.message).join("; ");
+      return res.status(400).json({
+        success: false,
+        message: `Validation Error: ${validationDetails}`,
       });
     }
     return res.status(500).json({
       success: false,
-      message:
-        "Internal server error during professional profile registration.",
+      message: error.message || "Internal server error during professional profile registration.",
     });
   }
 };

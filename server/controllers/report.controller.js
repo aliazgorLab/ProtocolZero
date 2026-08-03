@@ -10,6 +10,7 @@ const SYSTEM = require("../constants/system");
 const {
   emitReportToGeoRooms,
   emitVictimAttached,
+  emitToRoom,
 } = require("../socket");
 
 const buildLeanReportPayload = (report) => ({
@@ -103,6 +104,7 @@ exports.createReport = async (req, res) => {
 
     let newReport;
     let notificationCount = 0;
+    let createdNotifications = [];
 
     await session.withTransaction(async () => {
       newReport = new Report({
@@ -131,8 +133,8 @@ exports.createReport = async (req, res) => {
             recipientIds,
           );
 
-          await Notification.insertMany(notificationDocs, { session });
-          notificationCount = notificationDocs.length;
+          createdNotifications = await Notification.insertMany(notificationDocs, { session });
+          notificationCount = createdNotifications.length;
         }
       }
 
@@ -149,13 +151,17 @@ exports.createReport = async (req, res) => {
             recipients.map((recipient) => recipient._id),
           );
 
-          await Notification.insertMany(notificationDocs, { session });
-          notificationCount = notificationDocs.length;
+          createdNotifications = await Notification.insertMany(notificationDocs, { session });
+          notificationCount = createdNotifications.length;
         }
       }
     });
 
     emitReportToGeoRooms("report:new", newReport, buildLeanReportPayload(newReport));
+
+    createdNotifications.forEach((notif) => {
+      emitToRoom(`user:${notif.recipientId}`, "notification:new", notif);
+    });
 
     return res.status(201).json({
       success: true,

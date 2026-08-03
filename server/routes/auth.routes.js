@@ -37,9 +37,10 @@ router.post(
 
 const { validateRegisterVetted } = require("../middleware/validators");
 
-// @route   POST /api/auth/register-vetted
+// @route   POST /api/auth/vetted-register or /register-vetted
 // @desc    Register a vetted professional (Reporter or ResponseTeam)
 // @access  Protected (Requires Firebase Bearer Token in Headers)
+router.post("/vetted-register", validateRegisterVetted, authController.registerVettedProfessional);
 router.post("/register-vetted", validateRegisterVetted, authController.registerVettedProfessional);
 
 // @route   GET /api/auth/me

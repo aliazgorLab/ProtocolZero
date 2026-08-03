@@ -79,3 +79,26 @@ exports.markAsRead = async (req, res) => {
     });
   }
 };
+
+// @desc    Mark all notifications for the authenticated user as read
+// @route   PATCH /api/notifications/read-all
+// @access  Protected
+exports.markAllAsRead = async (req, res) => {
+  try {
+    await Notification.updateMany(
+      { recipientId: req.user._id, read: false },
+      { $set: { read: true } }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "All notifications marked as read.",
+    });
+  } catch (error) {
+    console.error("[ERROR] Mark All Notifications Read Failure:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while updating notifications.",
+    });
+  }
+};

@@ -8,6 +8,11 @@ const notificationController = require("../controllers/notification.controller")
 // @access  Protected
 router.get("/", verifyFirebaseAuth, notificationController.getNotifications);
 
+// @route   PATCH /api/notifications/read-all
+// @desc    Mark all notifications as read
+// @access  Protected
+router.patch("/read-all", verifyFirebaseAuth, notificationController.markAllAsRead);
+
 // @route   PATCH /api/notifications/:id/read
 // @desc    Mark a notification as read
 // @access  Protected

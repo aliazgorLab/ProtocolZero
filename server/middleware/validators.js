@@ -120,16 +120,14 @@ const validateRegisterVetted = [
     .exists({ checkFalsy: true })
     .isIn(["Reporter", "ResponseTeam"])
     .withMessage('accountType must be either "Reporter" or "ResponseTeam".'),
-  body("organization")
-    .exists({ checkFalsy: true })
-    .isString()
-    .notEmpty()
-    .withMessage("organization is required."),
-  body("credentials")
-    .exists({ checkFalsy: true })
-    .isString()
-    .notEmpty()
-    .withMessage("credentials are required."),
+  body("name").trim().notEmpty().withMessage("Full name is required."),
+  body("phone").trim().notEmpty().withMessage("Phone number is required."),
+  body("nid").trim().notEmpty().withMessage("National ID (NID) is required."),
+  body("face").notEmpty().withMessage("Facial verification image is required."),
+  body("role")
+    .optional({ nullable: true })
+    .isIn(["police", "firefighter", "civilsurgeon", "", null])
+    .withMessage("Invalid response team sub-role."),
   handleValidationErrors,
 ];
 

@@ -57,9 +57,13 @@ const SelectRole = () => {
 
   const handleConfirm = () => {
     if (!selectedRole) return;
-    // TODO: Connect to real API to set user role
-    // Example: dispatch(updateUserRole(selectedRole))
-    navigate('/home');
+    if (selectedRole === 'response') {
+      navigate('/signup/response-team');
+    } else if (selectedRole === 'reporter') {
+      navigate('/signup/vetted');
+    } else {
+      navigate('/signup');
+    }
   };
 
   return (

@@ -24,6 +24,9 @@ export const setSocketAuthToken = (token) => {
 };
 
 export const connectSocket = (token = localStorage.getItem("token")) => {
+  if (!token) {
+    return socket;
+  }
   setSocketAuthToken(token);
 
   if (!socket.connected) {

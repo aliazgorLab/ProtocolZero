@@ -7,6 +7,7 @@ const SidebarMenu = ({ isOpen, onClose }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user: currentUser } = useSelector((state) => state.auth);
+  const { unreadCount } = useSelector((state) => state.notifications);
   
   const handleSignOut = () => {
     dispatch(logout());
@@ -48,13 +49,18 @@ const SidebarMenu = ({ isOpen, onClose }) => {
             <div className="grid grid-cols-4 gap-3">
               {[
                 { label: 'Map', icon: 'map', color: 'bg-blue-100 text-blue-600', path: '/map' },
-                { label: 'Alerts', icon: 'notifications_active', color: 'bg-red-100 text-red-600', path: '/alerts' },
+                { label: 'Alerts', icon: 'notifications_active', color: 'bg-red-100 text-red-600', path: '/alerts', badge: unreadCount },
                 { label: 'Reports', icon: 'list_alt', color: 'bg-green-100 text-green-600', path: '/home' },
                 { label: 'Verify', icon: 'verified_user', color: 'bg-purple-100 text-purple-600', path: '#' }
               ].map((item, idx) => (
-                <Link to={item.path} onClick={onClose} key={idx} className="flex flex-col items-center gap-1 group">
-                  <div className={`w-14 h-14 rounded-2xl ${item.color} flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform`}>
+                <Link to={item.path} onClick={onClose} key={idx} className="flex flex-col items-center gap-1 group relative">
+                  <div className={`w-14 h-14 rounded-2xl ${item.color} flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform relative`}>
                     <span className="material-symbols-outlined text-2xl">{item.icon}</span>
+                    {item.badge > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-alert-red text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-pulse">
+                        {item.badge}
+                      </span>
+                    )}
                   </div>
                   <span className="text-xs font-medium text-center truncate w-full">{item.label}</span>
                 </Link>

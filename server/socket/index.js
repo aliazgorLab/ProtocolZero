@@ -123,7 +123,9 @@ const initializeSocket = (httpServer) => {
     });
 
     ioInstance.on("connection", (socket) => {
+        const userRoom = `user:${socket.user._id.toString()}`;
         const roleRoom = `role:${socket.accountType}`;
+        socket.join(userRoom);
         socket.join(roleRoom);
 
         if (socket.geoCell) {
@@ -132,6 +134,7 @@ const initializeSocket = (httpServer) => {
 
         socket.emit("socket:ready", {
             success: true,
+            userRoom,
             roleRoom,
             geoCell: socket.geoCell,
         });

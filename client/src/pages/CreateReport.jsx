@@ -187,7 +187,12 @@ const CreateReport = () => {
       navigate('/home');
     } catch (error) {
       console.error(error);
-      showToast(error.response?.data?.message || 'Failed to submit report', 'error');
+      if (error.response?.status === 409 && error.response?.data?.existingReportId) {
+        showToast(error.response.data.message || 'An active duplicate report exists nearby.', 'warning');
+        navigate(`/reports/${error.response.data.existingReportId}`);
+      } else {
+        showToast(error.response?.data?.message || 'Failed to submit report', 'error');
+      }
     } finally {
       setIsSubmitting(false);
     }
