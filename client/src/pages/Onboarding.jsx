@@ -1,9 +1,18 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const Onboarding = () => {
   const bgRef = useRef(null);
   const navigate = useNavigate();
+
+  const [showPortals, setShowPortals] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowPortals(true);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -53,7 +62,7 @@ const Onboarding = () => {
       {/* Main Content Canvas */}
       <main className="relative z-20 flex flex-col items-center justify-center min-h-screen px-4 py-8">
         {/* Brand Section */}
-        <div className="flex flex-col items-center text-center max-w-lg">
+        <div className={`flex flex-col items-center text-center max-w-lg transition-transform duration-1000 ease-in-out ${showPortals ? 'scale-100 translate-y-0' : 'scale-110 md:scale-125 translate-y-24 md:translate-y-32'}`}>
           <div className="relative mb-6 group animate-enter">
             <div className="absolute -inset-4 bg-primary/10 rounded-full blur-xl group-hover:bg-primary/20 transition-all duration-700"></div>
             <img 
@@ -75,24 +84,52 @@ const Onboarding = () => {
           </p>
         </div>
 
-        {/* Action Section */}
-        <div className="w-full max-w-xs flex flex-col gap-2 animate-enter">
-          {/* TODO: connect to real Login/Signup flow */}
-          <button 
-            onClick={() => navigate('/login')}
-            className="group relative overflow-hidden bg-primary text-on-primary text-xl font-semibold h-14 rounded-xl shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200"
-          >
-            <span className="relative z-10">Get Started</span>
-            <div className="absolute inset-0 bg-white/10 translate-y-14 group-hover:translate-y-0 transition-transform duration-300"></div>
-          </button>
+        {/* Portals Section */}
+        <div className={`w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6 mt-8 px-4 transition-all duration-1000 ease-in-out ${showPortals ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
           
-          <button 
-            onClick={() => navigate('/login?role=responder')}
-            className="flex items-center justify-center gap-1 text-on-surface-variant text-xs font-medium h-12 rounded-xl border border-outline-variant/30 bg-surface-container-low/50 backdrop-blur-sm hover:bg-surface-container-high transition-colors active:opacity-80"
-          >
-            <span className="material-symbols-outlined text-sm">medical_services</span>
-            I am a First Responder
-          </button>
+          {/* Citizen Portal */}
+          <div className="bg-surface-container-low/80 backdrop-blur-md rounded-2xl p-6 border border-outline-variant/30 flex flex-col items-center text-center hover:border-primary/50 transition-colors shadow-sm">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4 text-primary">
+              <span className="material-symbols-outlined text-[32px]">groups</span>
+            </div>
+            <h2 className="text-xl font-bold mb-2">Citizen Portal</h2>
+            <p className="text-sm text-on-surface-variant mb-6 flex-grow">
+              Report incidents, view local alerts, and assist your community as a citizen or volunteer.
+            </p>
+            <div className="flex flex-col w-full gap-3">
+              <button 
+                onClick={() => navigate('/login')}
+                className="w-full bg-primary text-on-primary font-semibold h-12 rounded-xl hover:bg-primary-container hover:text-on-primary-container active:scale-95 transition-all"
+              >
+                Sign In
+              </button>
+            </div>
+          </div>
+
+          {/* Vetted Professional Portal */}
+          <div className="bg-surface-container-low/80 backdrop-blur-md rounded-2xl p-6 border border-outline-variant/30 flex flex-col items-center text-center hover:border-tertiary/50 transition-colors shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-2">
+              <span className="bg-tertiary-container text-on-tertiary-container text-[10px] font-bold uppercase px-2 py-1 rounded-bl-lg rounded-tr-lg">
+                Official Access
+              </span>
+            </div>
+            <div className="w-16 h-16 rounded-full bg-tertiary/10 flex items-center justify-center mb-4 text-tertiary">
+              <span className="material-symbols-outlined text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>local_police</span>
+            </div>
+            <h2 className="text-xl font-bold mb-2 text-on-surface">Vetted Professionals</h2>
+            <p className="text-sm text-on-surface-variant mb-6 flex-grow">
+              Secure access for Reporters, Law Enforcement, Medical, and Emergency Response Teams.
+            </p>
+            <div className="flex flex-col w-full gap-3">
+              <button 
+                onClick={() => navigate('/login/vetted')}
+                className="w-full bg-tertiary text-on-tertiary font-semibold h-12 rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-md"
+              >
+                Official Sign In
+              </button>
+            </div>
+          </div>
+          
         </div>
 
         {/* Accessibility / Footer Meta */}
