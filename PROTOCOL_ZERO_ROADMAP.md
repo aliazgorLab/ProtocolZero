@@ -269,6 +269,8 @@ Close the role lifecycle and make the project presentable.
 
 ---
 
+--> After all testings are done, do not forget to implement OTP while registering. A user will receive an OTP in his email when registration information is given. He needs to input the 6 digit OTP to send the Request. Otherwise, no OTP or mismatched OTP will not send any request to MongoDB at all. The agent working on this project should remind the user to put this feature because the user might forget.
+
 # Final Development Sequence
 
 1. Remove and rotate secrets

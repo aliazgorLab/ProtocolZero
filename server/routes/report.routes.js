@@ -15,6 +15,7 @@ const {
 router.use(verifyFirebaseAuth);
 
 router.post("/", validateCreateReport, reportController.createReport);
+router.get("/", reportController.getAllReports);
 router.get("/nearby", reportController.getNearbyReports);
 router.get("/:id", reportController.getReportById);
 router.post("/:id/comment", validateReportComment, reportController.addReportComment);

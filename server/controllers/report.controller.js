@@ -4,6 +4,8 @@ const User = require("../models/User");
 const Notification = require("../models/Notification");
 
 const reportService = require("../services/report.service");
+const scoringService = require("../services/scoring.service");
+const reliabilityService = require("../services/reliability.service");
 const SYSTEM = require("../constants/system");
 const {
   emitReportToGeoRooms,
@@ -171,6 +173,35 @@ exports.createReport = async (req, res) => {
     });
   } finally {
     session.endSession();
+  }
+};
+
+// @desc    Get all incident reports (active & closed, optional status/type filter)
+// @route   GET /api/reports
+// @access  Protected
+exports.getAllReports = async (req, res) => {
+  try {
+    const { status, type } = req.query;
+    const filter = {};
+
+    if (status) filter.status = status;
+    if (type) filter.type = type;
+
+    const reports = await Report.find(filter)
+      .populate("issuerId", "name accountType face")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: reports.length,
+      data: reports,
+    });
+  } catch (error) {
+    console.error("[ERROR] Fetch All Reports Failure:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching reports feed.",
+    });
   }
 };
 
@@ -382,6 +413,9 @@ exports.voteOnReport = async (req, res) => {
     }
 
     await report.save();
+
+    // Trigger fake report detection logic (Phase 4.2)
+    reliabilityService.checkAndEscalateReport(report._id).catch(err => console.error(err));
 
     emitReportToGeoRooms("report:vote", report, buildLeanReportPayload(report));
 
@@ -757,6 +791,9 @@ exports.closeReport = async (req, res) => {
     report.reliability = reliability;
 
     await report.save();
+
+    // Recompute reliability score for the author (Phase 4.1)
+    scoringService.recomputeUserScore(report.issuerId._id).catch(err => console.error(err));
 
     return res.status(200).json({
       success: true,
