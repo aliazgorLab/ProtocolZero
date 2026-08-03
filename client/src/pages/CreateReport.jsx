@@ -14,6 +14,7 @@ const CreateReport = () => {
   const [impactAreas, setImpactAreas] = useState([
     { coordinate: '40.7632, -73.9721', radius: '250' },
   ]);
+  const [resources, setResources] = useState([]);
   const navigate = useNavigate();
 
   const categories = useMemo(() => ([
@@ -36,6 +37,7 @@ const CreateReport = () => {
       location: locationLabel,
       images,
       impactAreas: reportType === 'major' ? impactAreas : [],
+      resourcesNeeded: reportType === 'major' ? resources : [],
     };
     console.log('Dummy report payload', payload);
     navigate('/home');
@@ -57,6 +59,20 @@ const CreateReport = () => {
     setImpactAreas((previous) => previous.map((item, itemIndex) => (
       itemIndex === index ? { ...item, [field]: value } : item
     )));
+  };
+
+  const addResource = () => {
+    setResources((prev) => [...prev, { itemName: '', quantity: '', unit: '' }]);
+  };
+
+  const updateResource = (index, field, value) => {
+    setResources((prev) => prev.map((item, idx) => (
+      idx === index ? { ...item, [field]: value } : item
+    )));
+  };
+
+  const removeResource = (index) => {
+    setResources((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   return (
@@ -266,6 +282,65 @@ const CreateReport = () => {
                           />
                         </div>
                       ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Resource Allocation (Major Only) */}
+              {reportType === 'major' && (
+                <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                  <div className="rounded-xl border border-primary/30 bg-primary/5 overflow-hidden">
+                    <div className="bg-primary/10 p-4 flex items-center justify-between border-b border-primary/20">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary">inventory_2</span>
+                        <h4 className="text-sm font-bold text-primary uppercase tracking-wider">Resource Allocation</h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={addResource}
+                        className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-surface-container text-primary border border-primary/30 px-3 py-1.5 rounded-full shadow-sm hover:bg-primary hover:text-white transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">add</span>
+                        Request Resource
+                      </button>
+                    </div>
+
+                    <div className="p-4 space-y-3">
+                      {resources.length === 0 ? (
+                        <p className="text-xs text-on-surface-variant font-medium italic text-center py-2">No resources requested. Click "Request Resource" to add supplies or units needed.</p>
+                      ) : (
+                        resources.map((resource, index) => (
+                          <div key={index} className="flex gap-2 items-center">
+                            <input
+                              value={resource.itemName}
+                              onChange={(event) => updateResource(index, 'itemName', event.target.value)}
+                              placeholder="Item (e.g. Fire Trucks, Water)"
+                              className="flex-1 rounded-lg border border-primary/30 bg-surface-container-lowest px-4 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+                            />
+                            <input
+                              type="number"
+                              value={resource.quantity}
+                              onChange={(event) => updateResource(index, 'quantity', event.target.value)}
+                              placeholder="Qty"
+                              className="w-20 rounded-lg border border-primary/30 bg-surface-container-lowest px-3 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary text-center"
+                            />
+                            <input
+                              value={resource.unit}
+                              onChange={(event) => updateResource(index, 'unit', event.target.value)}
+                              placeholder="Unit (e.g. units, liters)"
+                              className="w-28 rounded-lg border border-primary/30 bg-surface-container-lowest px-3 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+                            />
+                            <button 
+                              type="button" 
+                              onClick={() => removeResource(index)}
+                              className="p-2 text-on-surface-variant hover:text-alert-red hover:bg-alert-red/10 rounded-lg transition-colors shrink-0"
+                            >
+                              <span className="material-symbols-outlined">delete</span>
+                            </button>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
