@@ -7,23 +7,8 @@ const FIREBASE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY;
 export const loginUser = createAsyncThunk(
   'auth/login',
   async (credentials, { rejectWithValue }) => {
-    const targetEmail = (credentials.email || '').trim().toLowerCase();
-
-    // 1. Precheck lockout status for this email
     try {
-      await axiosInstance.post('/auth/login-precheck', { email: targetEmail });
-    } catch (precheckErr) {
-      if (precheckErr.response?.status === 429) {
-        return rejectWithValue(
-          precheckErr.response.data.message || 'Login attempts for this account are locked for 10 minutes.'
-        );
-      }
-    }
-
-    // 2. Attempt Firebase Authentication
-    let firebaseRes;
-    try {
-      firebaseRes = await axios.post(
+      const firebaseRes = await axios.post(
         `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`,
         {
           email: credentials.email,
@@ -31,32 +16,9 @@ export const loginUser = createAsyncThunk(
           returnSecureToken: true,
         },
       );
-    } catch (fbError) {
-      let lockoutMsg = 'Invalid email or password.';
-      try {
-        const failRes = await axiosInstance.post('/auth/record-login-failure', { email: targetEmail });
-        if (failRes.data?.message) {
-          lockoutMsg = failRes.data.message;
-        }
-      } catch (recordErr) {
-        if (recordErr.response?.data?.message) {
-          lockoutMsg = recordErr.response.data.message;
-        }
-      }
-      return rejectWithValue(lockoutMsg);
-    }
 
-    const idToken = firebaseRes.data.idToken;
+      const idToken = firebaseRes.data.idToken;
 
-    // 3. Clear failed password attempts on successful password verification
-    try {
-      await axiosInstance.post('/auth/clear-login-failure', { email: targetEmail });
-    } catch (clearErr) {
-      // Non-critical clear failure
-    }
-
-    // 4. Perform Backend Login Check
-    try {
       const checkRes = await axiosInstance.post(
         '/auth/login-check',
         { loginType: credentials.loginType || 'citizen' },

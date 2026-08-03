@@ -378,6 +378,8 @@ exports.verifyEmailOtp = async (req, res) => {
 };
 
 const crypto = require("crypto");
+const JWT_SECRET = process.env.JWT_SECRET || "protocol_zero_secure_registration_secret_key";
+
 const otpLockoutMap = new Map(); // email -> { attempts: number, lockUntil: number }
 
 const getLockoutInfo = (email) => {
@@ -406,108 +408,6 @@ const recordFailedOtpAttempt = (email) => {
 const clearOtpLockout = (email) => {
   const normEmail = (email || "").toLowerCase().trim();
   otpLockoutMap.delete(normEmail);
-};
-
-const passwordLockoutMap = new Map(); // email -> { attempts: number, lockUntil: number }
-
-const getPasswordLockoutInfo = (email) => {
-  const normEmail = (email || "").toLowerCase().trim();
-  const record = passwordLockoutMap.get(normEmail);
-  if (!record) return { isLocked: false, attempts: 0 };
-  if (Date.now() > record.lockUntil) {
-    passwordLockoutMap.delete(normEmail);
-    return { isLocked: false, attempts: 0 };
-  }
-  const remainingMins = Math.ceil((record.lockUntil - Date.now()) / 60000);
-  return { isLocked: true, attempts: record.attempts, remainingMins };
-};
-
-const recordFailedPasswordAttempt = (email) => {
-  const normEmail = (email || "").toLowerCase().trim();
-  const record = passwordLockoutMap.get(normEmail) || { attempts: 0, lockUntil: 0 };
-  record.attempts += 1;
-  if (record.attempts >= 5) {
-    record.lockUntil = Date.now() + 10 * 60 * 1000; // 10 minutes lockout
-  }
-  passwordLockoutMap.set(normEmail, record);
-  return record;
-};
-
-const clearPasswordLockout = (email) => {
-  const normEmail = (email || "").toLowerCase().trim();
-  passwordLockoutMap.delete(normEmail);
-};
-
-// @desc    Pre-check if email is currently locked out from password attempts
-// @route   POST /api/auth/login-precheck
-exports.loginPrecheck = async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(200).json({ success: true, isLocked: false });
-
-    const lockout = getPasswordLockoutInfo(email);
-    if (lockout.isLocked) {
-      return res.status(429).json({
-        success: false,
-        isLocked: true,
-        message: `Too many failed password attempts. Login attempts for this account are suspended for ${lockout.remainingMins} more minute(s).`,
-      });
-    }
-
-    return res.status(200).json({ success: true, isLocked: false });
-  } catch (error) {
-    return res.status(200).json({ success: true, isLocked: false });
-  }
-};
-
-// @desc    Record a failed password attempt
-// @route   POST /api/auth/record-login-failure
-exports.recordLoginFailure = async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false, message: "Email required." });
-
-    const targetEmail = email.trim().toLowerCase();
-    const lockout = getPasswordLockoutInfo(targetEmail);
-
-    if (lockout.isLocked) {
-      return res.status(429).json({
-        success: false,
-        isLocked: true,
-        message: `Too many failed password attempts. Login suspended for ${lockout.remainingMins} more minute(s).`,
-      });
-    }
-
-    const record = recordFailedPasswordAttempt(targetEmail);
-    if (record.attempts >= 5) {
-      return res.status(429).json({
-        success: false,
-        isLocked: true,
-        message: "Maximum password attempts (5/5) exceeded. Login suspended for 10 minutes.",
-      });
-    }
-
-    const remaining = 5 - record.attempts;
-    return res.status(400).json({
-      success: false,
-      attempts: record.attempts,
-      message: `Invalid email or password. You have ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before a 10-minute lockout.`,
-    });
-  } catch (error) {
-    return res.status(400).json({ success: false, message: "Invalid email or password." });
-  }
-};
-
-// @desc    Clear password lockout counter on successful password login
-// @route   POST /api/auth/clear-login-failure
-exports.clearLoginFailure = async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (email) clearPasswordLockout(email);
-    return res.status(200).json({ success: true });
-  } catch (error) {
-    return res.status(200).json({ success: true });
-  }
 };
 
 const generateRegistrationToken = (email, phone, otp) => {
