@@ -574,6 +574,7 @@ exports.verifyRegistrationOtp = async (req, res) => {
       name,
       phone,
       email,
+      password,
       accountType = "User",
       nid,
       face,
@@ -605,6 +606,37 @@ exports.verifyRegistrationOtp = async (req, res) => {
       });
     }
 
+    // Synchronize / Create user account in Firebase Authentication
+    let firebaseUid = null;
+    try {
+      let fbUser;
+      try {
+        fbUser = await admin.auth().getUserByEmail(userEmail);
+      } catch (notFoundErr) {
+        if (password) {
+          try {
+            fbUser = await admin.auth().createUser({
+              email: userEmail,
+              password: password,
+              displayName: name,
+              phoneNumber: targetPhone.startsWith("+") ? targetPhone : undefined,
+            });
+          } catch (phoneErr) {
+            fbUser = await admin.auth().createUser({
+              email: userEmail,
+              password: password,
+              displayName: name,
+            });
+          }
+        }
+      }
+      if (fbUser?.uid) {
+        firebaseUid = fbUser.uid;
+      }
+    } catch (fbSyncErr) {
+      console.warn("[WARN] Firebase Auth sync in verifyRegistrationOtp failed:", fbSyncErr.message);
+    }
+
     // Determine verification status
     const isVetted = ["Reporter", "ResponseTeam"].includes(accountType);
     const verificationStatus = isVetted ? "pending" : "verified";
@@ -615,6 +647,7 @@ exports.verifyRegistrationOtp = async (req, res) => {
       email: userEmail,
       accountType,
       verificationStatus,
+      firebaseUid,
       score: 0,
     };
 

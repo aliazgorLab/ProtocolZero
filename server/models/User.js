@@ -78,7 +78,8 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
-    // --- EXTRA SECURITY LAYER (2FA) ---
+    // --- FIREBASE SYNC & EXTRA SECURITY LAYER (2FA) ---
+    firebaseUid: { type: String, default: null, index: true },
     twoFactorEnabled: { type: Boolean, default: false },
     emailOtp: { type: String, default: null },
     otpExpires: { type: Date, default: null },
