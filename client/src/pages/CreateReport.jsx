@@ -1,46 +1,148 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-
+import { GoogleMap, useJsApiLoader, Marker, Circle } from '@react-google-maps/api';
+import { useToast } from '../context/ToastContext';
+import axiosInstance from '../api/axiosInstance';
 const CreateReport = () => {
   const { user: currentUser } = useSelector((state) => state.auth);
   const currentUserRole = currentUser?.accountType || 'User';
+  const { showToast } = useToast();
   
   const [reportType, setReportType] = useState('minor');
-  const [selectedCategory, setSelectedCategory] = useState('general-hazard');
+  const [selectedCategory, setSelectedCategory] = useState('Medical Emergency');
   const [description, setDescription] = useState('');
-  const [locationLabel, setLocationLabel] = useState('45th St & Madison Avenue, New York, NY');
+  
+  const [locationCoords, setLocationCoords] = useState(() => {
+    if (currentUser?.gps?.coordinates) {
+      return { lat: currentUser.gps.coordinates[1], lng: currentUser.gps.coordinates[0] };
+    }
+    return { lat: 22.3569, lng: 91.7832 }; // Chittagong
+  });
+
   const [images, setImages] = useState([]);
   const [impactAreas, setImpactAreas] = useState([
-    { coordinate: '40.7632, -73.9721', radius: '250' },
+    { id: 'initial-zone', coordinate: '22.3569, 91.7832', radius: '250' },
   ]);
   const [resources, setResources] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  const categories = useMemo(() => ([
-    { id: 'general-hazard', label: 'General Hazard', icon: 'warning' },
-    { id: 'fire', label: 'Fire', icon: 'local_fire_department' },
-    { id: 'medical', label: 'Medical Emergency', icon: 'medical_services' },
-    { id: 'crime', label: 'Security / Crime', icon: 'local_police' },
-    { id: 'flood', label: 'Flood / Weather', icon: 'flood' },
-    { id: 'infrastructure', label: 'Infrastructure Failure', icon: 'engineering' },
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+  });
+
+  const minorCategories = useMemo(() => ([
+    { id: 'Medical Emergency', label: 'Medical Emergency', icon: 'medical_services' },
+    { id: 'Road Accident', label: 'Road Accident', icon: 'car_crash' },
+    { id: 'Road Blockage / Hazard', label: 'Road Blockage / Hazard', icon: 'block' },
+    { id: 'Localized Fire', label: 'Localized Fire', icon: 'local_fire_department' },
+    { id: 'Theft / Robbery', label: 'Theft / Robbery', icon: 'local_police' },
+    { id: 'Violence / Assault', label: 'Violence / Assault', icon: 'swords' },
+    { id: 'Missing Person', label: 'Missing Person', icon: 'person_search' },
+    { id: 'Utility Failure', label: 'Utility Failure', icon: 'power_off' },
   ]), []);
 
-  const majorLocked = currentUserRole === 'User' || currentUserRole === 'Volunteer';
+  const majorCategories = useMemo(() => ([
+    { id: 'Flood', label: 'Flood', icon: 'flood' },
+    { id: 'Waterlogging', label: 'Waterlogging', icon: 'water_damage' },
+    { id: 'Industrial / Widespread Fire', label: 'Industrial / Widespread Fire', icon: 'fire_truck' },
+    { id: 'Earthquake', label: 'Earthquake', icon: 'public' },
+    { id: 'Structural Collapse', label: 'Structural Collapse', icon: 'domain_disabled' },
+    { id: 'Chemical Spill / Gas Leak', label: 'Chemical Spill / Gas Leak', icon: 'warning' },
+    { id: 'Cyclone', label: 'Cyclone', icon: 'cyclone' },
+    { id: 'Tornado', label: 'Tornado', icon: 'tornado' },
+    { id: 'Landslide', label: 'Landslide', icon: 'landscape' },
+  ]), []);
 
-  const handleSubmit = (e) => {
+  const categories = reportType === 'major' ? majorCategories : minorCategories;
+
+  useEffect(() => {
+    // Reset category when type changes
+    setSelectedCategory(categories[0].id);
+  }, [reportType, categories]);
+
+  const isReporterOrAdmin = ['Reporter', 'Admin', 'SuperAdmin'].includes(currentUserRole);
+
+  const handleSyncGPS = () => {
+    if (!navigator.geolocation) {
+      showToast("Geolocation is not supported by your browser.", "warning");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocationCoords({ lat: position.coords.latitude, lng: position.coords.longitude });
+        showToast("Location updated from GPS", "success");
+      },
+      (error) => {
+        showToast("Could not access GPS location.", "error");
+      }
+    );
+  };
+
+  const handleMapClick = (e) => {
+    if (reportType === 'major') {
+      const lat = e.latLng.lat();
+      const lng = e.latLng.lng();
+      const newCoord = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      
+      setImpactAreas(prev => {
+        const emptyIndex = prev.findIndex(ia => !ia.coordinate || ia.coordinate.trim() === '');
+        if (emptyIndex !== -1) {
+          const newAreas = [...prev];
+          newAreas[emptyIndex] = { ...newAreas[emptyIndex], coordinate: newCoord };
+          return newAreas;
+        } else {
+          return [...prev, { id: Date.now() + Math.random(), coordinate: newCoord, radius: '500' }];
+        }
+      });
+      showToast("Impact zone coordinate set via map.", "success");
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!description.trim()) {
+      showToast('Please provide a description.', 'warning');
+      return;
+    }
+    setIsSubmitting(true);
+    
+    let parsedImpactAreas = [];
+    if (reportType === 'major') {
+      parsedImpactAreas = impactAreas.map(ia => {
+        const [latStr, lngStr] = ia.coordinate.split(',').map(s => s.trim());
+        return {
+          coordinate: { type: 'Point', coordinates: [parseFloat(lngStr), parseFloat(latStr)] },
+          radius: parseFloat(ia.radius)
+        };
+      }).filter(ia => !isNaN(ia.radius) && ia.coordinate.coordinates.every(c => !isNaN(c)));
+    }
+
     const payload = {
-      reportType,
+      type: reportType,
       category: selectedCategory,
       description,
-      location: locationLabel,
-      images,
-      impactAreas: reportType === 'major' ? impactAreas : [],
-      resourcesNeeded: reportType === 'major' ? resources : [],
+      location: {
+        type: 'Point',
+        coordinates: [locationCoords.lng, locationCoords.lat]
+      },
+      images: images.map(img => img.name), // Currently mock data until Cloudinary is hooked up
+      impactAreas: reportType === 'major' ? parsedImpactAreas : undefined,
+      resourcesNeeded: reportType === 'major' ? resources.filter(r => r.itemName && r.quantity && r.unit) : undefined,
     };
-    console.log('Dummy report payload', payload);
-    navigate('/home');
+
+    try {
+      await axiosInstance.post('/reports', payload);
+      showToast('Incident Broadcasted Successfully!', 'success');
+      navigate('/home');
+    } catch (error) {
+      console.error(error);
+      showToast(error.response?.data?.message || 'Failed to submit report', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleImageUpload = (event) => {
@@ -52,13 +154,17 @@ const CreateReport = () => {
   };
 
   const addImpactArea = () => {
-    setImpactAreas((previous) => ([...previous, { coordinate: '', radius: '' }]));
+    setImpactAreas((previous) => ([...previous, { id: Date.now() + Math.random(), coordinate: '', radius: '500' }]));
   };
 
   const updateImpactArea = (index, field, value) => {
     setImpactAreas((previous) => previous.map((item, itemIndex) => (
       itemIndex === index ? { ...item, [field]: value } : item
     )));
+  };
+
+  const removeImpactArea = (index) => {
+    setImpactAreas((previous) => previous.filter((_, idx) => idx !== index));
   };
 
   const addResource = () => {
@@ -129,36 +235,25 @@ const CreateReport = () => {
                     </div>
                   </label>
 
-                  <label className={`relative flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all ${majorLocked ? 'opacity-50 grayscale cursor-not-allowed' : ''} ${reportType === 'major' ? 'border-alert-red bg-alert-red/5 shadow-[0_0_15px_rgba(255,0,0,0.1)]' : 'border-outline-variant/50 bg-surface-container-lowest hover:border-outline-variant'}`}>
-                    <div className="pt-1">
-                      <input
-                        type="radio"
-                        name="reportType"
-                        value="major"
-                        checked={reportType === 'major'}
-                        disabled={majorLocked}
-                        onChange={() => setReportType('major')}
-                        className="h-4 w-4 accent-alert-red disabled:cursor-not-allowed"
-                      />
-                    </div>
-                    <div>
-                      <div className={`font-bold uppercase tracking-wider ${reportType === 'major' ? 'text-alert-red' : 'text-on-surface'}`}>Major Incident</div>
-                      <div className="text-xs text-on-surface-variant font-medium mt-1">Wide-area emergency alert. Requires established impact zones.</div>
-                    </div>
-                    {majorLocked && (
-                      <div className="absolute -top-3 -right-2 bg-surface-container-highest text-on-surface-variant text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-sm border border-outline-variant/30">
-                        Restricted
+                  {isReporterOrAdmin && (
+                    <label className={`relative flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all ${reportType === 'major' ? 'border-alert-red bg-alert-red/5 shadow-[0_0_15px_rgba(255,0,0,0.1)]' : 'border-outline-variant/50 bg-surface-container-lowest hover:border-outline-variant'}`}>
+                      <div className="pt-1">
+                        <input
+                          type="radio"
+                          name="reportType"
+                          value="major"
+                          checked={reportType === 'major'}
+                          onChange={() => setReportType('major')}
+                          className="h-4 w-4 accent-alert-red"
+                        />
                       </div>
-                    )}
-                  </label>
-
+                      <div>
+                        <div className={`font-bold uppercase tracking-wider ${reportType === 'major' ? 'text-alert-red' : 'text-on-surface'}`}>Major Incident</div>
+                        <div className="text-xs text-on-surface-variant font-medium mt-1">Wide-area emergency alert. Requires established impact zones.</div>
+                      </div>
+                    </label>
+                  )}
                 </div>
-                {majorLocked && (
-                  <p className="mt-3 flex items-center gap-2 text-xs font-bold text-alert-red bg-alert-red/10 px-4 py-2 rounded-lg">
-                    <span className="material-symbols-outlined text-[16px]">lock</span>
-                    Major incident broadcasts require Verified Reporter or Admin clearance.
-                  </p>
-                )}
               </div>
 
               {/* Category */}
@@ -201,25 +296,136 @@ const CreateReport = () => {
                       <span className="material-symbols-outlined text-primary">radar</span>
                       <span className="text-sm font-bold text-on-surface uppercase tracking-wider">Target Location</span>
                     </div>
-                    <button type="button" className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full transition-colors">
+                    <button type="button" onClick={handleSyncGPS} className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-full transition-colors">
                       <span className="material-symbols-outlined text-[16px]">my_location</span>
                       Sync GPS
                     </button>
                   </div>
                   <div className="p-4">
-                    <div className="h-32 bg-surface-container rounded-lg border border-outline-variant/30 mb-4 flex items-center justify-center relative overflow-hidden">
-                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-                      <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest z-10">[ Tactical Map UI Hidden ]</span>
+                    <div className="h-64 bg-surface-container rounded-lg border border-outline-variant/30 mb-4 relative overflow-hidden">
+                      {isLoaded ? (
+                        <GoogleMap
+                          mapContainerStyle={{ width: '100%', height: '100%' }}
+                          center={locationCoords}
+                          zoom={16}
+                          options={{
+                            disableDefaultUI: true,
+                            zoomControl: true,
+                            styles: [
+                              { featureType: "all", elementType: "geometry.fill", stylers: [{ weight: "2.00" }] },
+                              { featureType: "all", elementType: "geometry.stroke", stylers: [{ color: "#9c9c9c" }] },
+                              { featureType: "all", elementType: "labels.text", stylers: [{ visibility: "on" }] },
+                              { featureType: "landscape", elementType: "all", stylers: [{ color: "#f2f2f2" }] },
+                              { featureType: "landscape", elementType: "geometry.fill", stylers: [{ color: "#ffffff" }] },
+                              { featureType: "landscape.man_made", elementType: "geometry.fill", stylers: [{ color: "#ffffff" }] },
+                              { featureType: "poi", elementType: "all", stylers: [{ visibility: "off" }] },
+                              { featureType: "road", elementType: "all", stylers: [{ saturation: -100 }, { lightness: 45 }] },
+                              { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#eeeeee" }] },
+                              { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#7b7b7b" }] },
+                              { featureType: "road", elementType: "labels.text.stroke", stylers: [{ color: "#ffffff" }] },
+                              { featureType: "water", elementType: "geometry.fill", stylers: [{ color: "#c8d7d4" }] },
+                            ]
+                          }}
+                          onClick={handleMapClick}
+                        >
+                          <Marker 
+                            position={locationCoords} 
+                            draggable={true} 
+                            onDragEnd={(e) => setLocationCoords({ lat: e.latLng.lat(), lng: e.latLng.lng() })} 
+                          />
+                          {reportType === 'major' && impactAreas.map((ia, index) => {
+                            const [latStr, lngStr] = ia.coordinate.split(',').map(s => s.trim());
+                            const lat = parseFloat(latStr);
+                            const lng = parseFloat(lngStr);
+                            const radius = parseFloat(ia.radius);
+                            if (isNaN(lat) || isNaN(lng) || isNaN(radius)) return null;
+                            return (
+                              <Circle
+                                key={ia.id}
+                                center={{ lat, lng }}
+                                radius={radius}
+                                options={{
+                                  fillColor: "#FF0000",
+                                  fillOpacity: 0.2,
+                                  strokeColor: "#FF0000",
+                                  strokeOpacity: 0.8,
+                                  strokeWeight: 2,
+                                }}
+                                onUnmount={(circle) => {
+                                  if (circle) circle.setMap(null);
+                                }}
+                              />
+                            );
+                          })}
+                        </GoogleMap>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-on-surface-variant font-bold text-sm">Loading Tactical Map...</div>
+                      )}
                     </div>
-                    <input
-                      value={locationLabel}
-                      onChange={(event) => setLocationLabel(event.target.value)}
-                      placeholder="Lat / Lng or selected address"
-                      className="w-full rounded-lg border border-outline-variant/50 bg-surface-container px-4 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-primary"
-                    />
+                    <div className="w-full rounded-lg border border-outline-variant/50 bg-surface-container px-4 py-3 text-sm font-bold text-primary flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span>Main Target Coordinates:</span>
+                        <span className="text-xs text-on-surface-variant font-medium">Lat: {locationCoords.lat.toFixed(6)}, Lng: {locationCoords.lng.toFixed(6)}</span>
+                      </div>
+                      {reportType === 'major' && (
+                        <span className="text-xs font-bold bg-alert-red/10 text-alert-red px-2 py-1 rounded">Click map to drop Impact Zone</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
+
+              {/* Impact Areas (Major Only) */}
+              {reportType === 'major' && (
+                <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                  <div className="rounded-xl border border-alert-red/30 bg-alert-red/5 overflow-hidden">
+                    <div className="bg-alert-red/10 p-4 flex items-center justify-between border-b border-alert-red/20">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-alert-red">crisis_alert</span>
+                        <h4 className="text-sm font-bold text-alert-red uppercase tracking-wider">Impact Zones</h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={addImpactArea}
+                        className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-white text-alert-red px-3 py-1.5 rounded-full shadow-sm hover:bg-alert-red hover:text-white transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">add</span>
+                        Add Zone
+                      </button>
+                    </div>
+
+                    <div className="p-4 space-y-3">
+                      {impactAreas.length === 0 ? (
+                        <p className="text-xs text-on-surface-variant font-medium italic text-center py-2">No impact zones plotted. Click the map to drop a zone.</p>
+                      ) : (
+                        impactAreas.map((impactArea, index) => (
+                          <div key={impactArea.id} className="flex gap-2 items-center">
+                            <input
+                              value={impactArea.coordinate}
+                              onChange={(event) => updateImpactArea(index, 'coordinate', event.target.value)}
+                              placeholder="Latitude, longitude"
+                              className="flex-1 rounded-lg border border-alert-red/30 bg-surface-container-lowest px-4 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-alert-red focus:ring-1 focus:ring-alert-red placeholder:text-alert-red/40"
+                            />
+                            <input
+                              value={impactArea.radius}
+                              onChange={(event) => updateImpactArea(index, 'radius', event.target.value)}
+                              placeholder="Radius (m)"
+                              className="w-32 rounded-lg border border-alert-red/30 bg-surface-container-lowest px-4 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-alert-red focus:ring-1 focus:ring-alert-red placeholder:text-alert-red/40"
+                            />
+                            <button 
+                              type="button" 
+                              onClick={() => removeImpactArea(index)}
+                              className="p-2 text-alert-red/60 hover:text-white hover:bg-alert-red rounded-lg transition-colors shrink-0"
+                            >
+                              <span className="material-symbols-outlined">delete</span>
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Images */}
               <div>
@@ -245,47 +451,6 @@ const CreateReport = () => {
                   </div>
                 )}
               </div>
-
-              {/* Impact Areas (Major Only) */}
-              {reportType === 'major' && (
-                <div className="animate-in fade-in slide-in-from-top-4 duration-300">
-                  <div className="rounded-xl border border-alert-red/30 bg-alert-red/5 overflow-hidden">
-                    <div className="bg-alert-red/10 p-4 flex items-center justify-between border-b border-alert-red/20">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-alert-red">crisis_alert</span>
-                        <h4 className="text-sm font-bold text-alert-red uppercase tracking-wider">Impact Zones</h4>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={addImpactArea}
-                        className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-white text-alert-red px-3 py-1.5 rounded-full shadow-sm hover:bg-alert-red hover:text-white transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">add</span>
-                        Add Zone
-                      </button>
-                    </div>
-
-                    <div className="p-4 space-y-3">
-                      {impactAreas.map((impactArea, index) => (
-                        <div key={`${index}-${impactArea.coordinate}`} className="grid gap-3 md:grid-cols-[1.3fr_0.7fr]">
-                          <input
-                            value={impactArea.coordinate}
-                            onChange={(event) => updateImpactArea(index, 'coordinate', event.target.value)}
-                            placeholder="Longitude, latitude"
-                            className="w-full rounded-lg border border-alert-red/30 bg-surface-container-lowest px-4 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-alert-red focus:ring-1 focus:ring-alert-red placeholder:text-alert-red/40"
-                          />
-                          <input
-                            value={impactArea.radius}
-                            onChange={(event) => updateImpactArea(index, 'radius', event.target.value)}
-                            placeholder="Radius (meters)"
-                            className="w-full rounded-lg border border-alert-red/30 bg-surface-container-lowest px-4 py-3 text-sm font-medium text-on-surface outline-none transition-colors focus:border-alert-red focus:ring-1 focus:ring-alert-red placeholder:text-alert-red/40"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Resource Allocation (Major Only) */}
               {reportType === 'major' && (
@@ -392,16 +557,17 @@ const CreateReport = () => {
                   </div>
                   <div className="bg-surface-container px-4 py-2 text-xs font-bold uppercase tracking-wider text-on-surface-variant border-t border-outline-variant/30 flex items-center gap-2">
                     <span className="material-symbols-outlined text-[16px]">location_on</span>
-                    <span className="truncate">{locationLabel || 'Location not set'}</span>
+                    <span className="truncate">{locationCoords.lat.toFixed(4)}, {locationCoords.lng.toFixed(4)}</span>
                   </div>
                 </div>
 
                 <button
                   type="submit"
-                  className={`mt-6 w-full rounded-xl px-5 py-4 text-sm font-black uppercase tracking-widest text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 ${reportType === 'major' ? 'bg-alert-red hover:bg-red-700 shadow-alert-red/20' : 'bg-primary hover:bg-primary/90 shadow-primary/20'}`}
+                  disabled={isSubmitting}
+                  className={`mt-6 w-full rounded-xl px-5 py-4 text-sm font-black uppercase tracking-widest text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 ${reportType === 'major' ? 'bg-alert-red hover:bg-red-700 shadow-alert-red/20' : 'bg-primary hover:bg-primary/90 shadow-primary/20'} ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <span className="material-symbols-outlined text-[20px]">send_and_archive</span>
-                  Transmit Data
+                  <span className="material-symbols-outlined text-[20px]">{isSubmitting ? 'hourglass_empty' : 'send_and_archive'}</span>
+                  {isSubmitting ? 'Transmitting...' : 'Transmit Data'}
                 </button>
 
                 <p className="mt-4 text-[10px] font-medium uppercase tracking-widest text-on-surface-variant text-center leading-relaxed">

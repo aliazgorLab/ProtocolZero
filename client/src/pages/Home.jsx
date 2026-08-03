@@ -1,35 +1,155 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import CreateReportBox from '../components/CreateReportBox';
+import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
+import { useDispatch, useSelector } from 'react-redux';
+import { updateLiveLocation } from '../features/auth/authSlice';
+import { useToast } from '../context/ToastContext';
 
 const Home = () => {
+  const dispatch = useDispatch();
+  const { showToast } = useToast();
+  const { user, isAuthenticated } = useSelector((state) => state.auth);
+  
   // Simple interaction states
   const [activeCard, setActiveCard] = useState(null);
+  const [zoomLevel, setZoomLevel] = useState(15);
+
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+  });
+
+  const [mapCenter, setMapCenter] = useState(() => {
+    if (user?.gps?.coordinates) {
+      return {
+        lat: user.gps.coordinates[1],
+        lng: user.gps.coordinates[0],
+      };
+    }
+    return { lat: 22.3569, lng: 91.7832 }; // Chittagong
+  });
+
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+
+  const handleRecenter = () => {
+    if (!navigator.geolocation) {
+      showToast("Geolocation is not supported by your browser.", "warning");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setMapCenter({ lat, lng });
+        
+        if (isAuthenticated) {
+          const gps = {
+            type: "Point",
+            coordinates: [lng, lat]
+          };
+          try {
+            await dispatch(updateLiveLocation(gps)).unwrap();
+            showToast("GPS Location successfully updated and saved to your profile!", "success");
+          } catch (err) {
+            console.error("Failed to update live location:", err);
+            showToast("Location fetched, but failed to save to server.", "error");
+          }
+        } else {
+          showToast("GPS Location centered on map!", "info");
+        }
+      },
+      (error) => {
+        console.error("Location access denied or failed", error);
+        if (error.code === error.PERMISSION_DENIED) {
+          showToast("Location access was denied. Please allow location access in your browser settings.", "warning");
+        } else {
+          showToast("Could not retrieve location. Please check your GPS signal.", "error");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  useEffect(() => {
+    if (navigator.permissions) {
+      navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+        if (result.state === 'granted') {
+          handleRecenter();
+        } else if (result.state === 'prompt') {
+          setShowLocationPrompt(true);
+        }
+      });
+    } else {
+      setShowLocationPrompt(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleAllowLocation = () => {
+    setShowLocationPrompt(false);
+    handleRecenter();
+  };
 
   return (
     <main className="pt-14 pb-24 min-h-screen">
       {/* Interactive Map Section (Sticky Top 30%) */}
       <section className="sticky top-14 h-[309px] w-full z-30 shadow-md">
         <div className="w-full h-full relative overflow-hidden bg-surface-container">
-          <img
-            className="w-full h-full object-cover"
-            alt="A clean, minimalist high-contrast digital map of a city grid"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBoNiwJ1YtFxKgRqpKhjVMwySPbWYrWbbyf1cMP2iSUtHugnrZXGT9-4-OnTPUuntjb5-7-b78KZXKci0YFcmPMhRkJWdch4NN-RCnWJA7yLp_XF5-BS-ZHM6M9TdnIHE0b86qnLjZrKXv3KIPq8b8Hn2kDjevgx8nO4KGejpInvOUoZppozL5cO1xQZFsDLhWZyMUXGyHLysaOuEt4wZNVQtW5EVZFdR4X79xeI23knj_czuwZR3Zy"
-          />
+          {isLoaded ? (
+            <GoogleMap
+              mapContainerStyle={{ width: '100%', height: '100%' }}
+              center={mapCenter}
+              zoom={zoomLevel}
+              options={{
+                disableDefaultUI: true,
+                zoomControl: false,
+                styles: [
+                  { featureType: "all", elementType: "geometry.fill", stylers: [{ weight: "2.00" }] },
+                  { featureType: "all", elementType: "geometry.stroke", stylers: [{ color: "#9c9c9c" }] },
+                  { featureType: "all", elementType: "labels.text", stylers: [{ visibility: "on" }] },
+                  { featureType: "landscape", elementType: "all", stylers: [{ color: "#f2f2f2" }] },
+                  { featureType: "landscape", elementType: "geometry.fill", stylers: [{ color: "#ffffff" }] },
+                  { featureType: "landscape.man_made", elementType: "geometry.fill", stylers: [{ color: "#ffffff" }] },
+                  { featureType: "poi", elementType: "all", stylers: [{ visibility: "off" }] },
+                  { featureType: "road", elementType: "all", stylers: [{ saturation: -100 }, { lightness: 45 }] },
+                  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#eeeeee" }] },
+                  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#7b7b7b" }] },
+                  { featureType: "road", elementType: "labels.text.stroke", stylers: [{ color: "#ffffff" }] },
+                  { featureType: "road.highway", elementType: "all", stylers: [{ visibility: "simplified" }] },
+                  { featureType: "road.arterial", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+                  { featureType: "transit", elementType: "all", stylers: [{ visibility: "off" }] },
+                  { featureType: "water", elementType: "all", stylers: [{ color: "#46bcec" }, { visibility: "on" }] },
+                  { featureType: "water", elementType: "geometry.fill", stylers: [{ color: "#c8d7d4" }] },
+                  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#070707" }] },
+                  { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#ffffff" }] }
+                ]
+              }}
+            >
+              <Marker position={mapCenter} title="Your Location" />
+            </GoogleMap>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-surface-variant text-on-surface-variant">
+              <span className="material-symbols-outlined animate-spin text-[32px]">progress_activity</span>
+            </div>
+          )}
           <div className="absolute inset-0 map-gradient-overlay pointer-events-none"></div>
 
           {/* Floating Map Controls */}
-          <div className="absolute top-4 right-4 flex flex-col gap-2">
-            <button className="bg-surface/90 backdrop-blur shadow-lg p-2 rounded-lg text-on-surface hover:bg-surface-container-high transition-colors">
+          <div className="absolute top-4 right-4 flex flex-col gap-2 pointer-events-auto">
+            <button 
+              onClick={handleRecenter}
+              className="bg-surface/90 backdrop-blur shadow-lg p-2 rounded-lg text-on-surface hover:bg-surface-container-high transition-colors active:scale-95"
+            >
               <span className="material-symbols-outlined">my_location</span>
             </button>
-            <button className="bg-surface/90 backdrop-blur shadow-lg p-2 rounded-lg text-on-surface hover:bg-surface-container-high transition-colors">
+            <button className="bg-surface/90 backdrop-blur shadow-lg p-2 rounded-lg text-on-surface hover:bg-surface-container-high transition-colors active:scale-95">
               <span className="material-symbols-outlined">layers</span>
             </button>
           </div>
 
           {/* Active Incident Pill */}
-          <div className="absolute bottom-4 left-4 flex gap-2">
+          <div className="absolute bottom-4 left-4 flex gap-2 pointer-events-auto">
             <div className="bg-alert-red text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1 shadow-lg animate-pulse">
               <span className="material-symbols-outlined text-sm">error</span>
               3 LIVE INCIDENTS
@@ -39,10 +159,22 @@ const Home = () => {
       </section>
 
       {/* Incident Feed */}
-      <div className="px-4 py-6 flex flex-col gap-6 relative z-40 bg-background/50 backdrop-blur-sm -mt-2 max-w-4xl mx-auto">
+      <div className="px-4 py-6 flex flex-col gap-6 relative z-40 bg-background/50 backdrop-blur-sm -mt-2">
         
-        {/* Create Report Box */}
-        <CreateReportBox />
+        {/* Prominent Action Bar */}
+        <div className="bg-primary-container text-on-primary-container p-4 rounded-xl flex items-center justify-between shadow-sm border border-primary/10 mb-2">
+          <div>
+            <h3 className="font-bold text-sm">Location Sync</h3>
+            <p className="text-xs opacity-80">Keep your coordinates updated</p>
+          </div>
+          <button 
+            onClick={handleRecenter}
+            className="bg-primary text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-primary/90 active:scale-95 transition-all shadow-md"
+          >
+            <span className="material-symbols-outlined text-[16px]">my_location</span>
+            SYNC GPS
+          </button>
+        </div>
 
         {/* Feed Filter/Header */}
         <div className="flex items-center justify-between mt-2">

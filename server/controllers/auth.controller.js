@@ -218,12 +218,26 @@ exports.getCurrentUser = async (req, res) => {
   }
 };
 
-// @desc    Step 1 of Login: Check if user requires Email OTP 2FA
+// @desc    Step 1 of Login: Check if user requires Email OTP 2FA and validate roles
 // @route   POST /api/auth/login-check
 // @access  Protected (Requires Firebase Bearer Token)
 exports.loginCheck = async (req, res) => {
   try {
     const user = req.user;
+    const { loginType } = req.body;
+
+    // Enforce login portal isolation
+    if (loginType === 'citizen' && !['User', 'Volunteer'].includes(user.accountType)) {
+      return res.status(403).json({ success: false, message: "Invalid portal for your account type. Please use the Vetted Professional or Admin login." });
+    }
+    
+    if (loginType === 'vetted' && !['Reporter', 'ResponseTeam'].includes(user.accountType)) {
+      return res.status(403).json({ success: false, message: "Invalid portal. This portal is strictly for Vetted Professionals (Reporters and Response Teams)." });
+    }
+
+    if (loginType === 'admin' && !['Admin', 'SuperAdmin'].includes(user.accountType)) {
+      return res.status(403).json({ success: false, message: "Invalid portal. Administrators only." });
+    }
 
     // Case A: Extra security layer is turned OFF -> Immediate Login
     if (!user.twoFactorEnabled) {

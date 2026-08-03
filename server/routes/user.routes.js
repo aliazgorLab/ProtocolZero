@@ -138,4 +138,13 @@ router.patch(
   userController.toggleTwoFactor,
 );
 
+// @route   PATCH /api/users/location
+// @desc    Update the user's live GPS coordinates
+// @access  Protected
+router.patch(
+  "/location",
+  verifyFirebaseAuth,
+  userController.updateLiveLocation
+);
+
 module.exports = router;

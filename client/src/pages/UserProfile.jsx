@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { logout, updateUser } from '../features/auth/authSlice';
+import { logout, updateUser, updateLiveLocation } from '../features/auth/authSlice';
 import axiosInstance from '../api/axiosInstance';
 import CreateReportBox from '../components/CreateReportBox';
+import { useToast } from '../context/ToastContext';
 
 const UserProfile = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [toggling2FA, setToggling2FA] = useState(false);
   const [gpsActive, setGpsActive] = useState(false);
 
@@ -20,18 +22,75 @@ const UserProfile = () => {
       const response = await axiosInstance.patch('/users/toggle-2fa');
       if (response.data.success) {
         dispatch(updateUser({ twoFactorEnabled: response.data.data.twoFactorEnabled }));
+        showToast("Two-Factor Authentication setting updated!", "success");
       }
     } catch (error) {
       console.error('Failed to toggle 2FA:', error);
-      alert(error.response?.data?.message || 'Failed to toggle 2FA settings.');
+      showToast(error.response?.data?.message || 'Failed to toggle 2FA settings.', "error");
     } finally {
       setToggling2FA(false);
     }
   };
 
+  useEffect(() => {
+    // Check permission state on mount and update local state
+    if (navigator.permissions) {
+      navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+        if (result.state === 'granted' && currentUser?.gps?.coordinates) {
+          setGpsActive(true);
+        } else {
+          setGpsActive(false);
+        }
+        
+        // Listen for permission changes
+        result.onchange = () => {
+          if (result.state === 'granted' && currentUser?.gps?.coordinates) {
+            setGpsActive(true);
+          } else {
+            setGpsActive(false);
+          }
+        };
+      });
+    } else {
+      setGpsActive(Boolean(currentUser?.gps?.coordinates));
+    }
+  }, [currentUser]);
+
   const handleToggleGPS = () => {
-    setGpsActive(!gpsActive);
-    // Note: No backend integration, UI only
+    if (!navigator.geolocation) {
+      showToast("Geolocation is not supported by your browser.", "warning");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        
+        const gps = {
+          type: "Point",
+          coordinates: [lng, lat]
+        };
+        try {
+          await dispatch(updateLiveLocation(gps)).unwrap();
+          setGpsActive(true);
+          showToast("GPS Location successfully updated and saved to your profile!", "success");
+        } catch (err) {
+          console.error("Failed to update live location:", err);
+          showToast("Location fetched, but failed to save to server.", "error");
+        }
+      },
+      (error) => {
+        console.error("Location access denied or failed", error);
+        setGpsActive(false);
+        if (error.code === error.PERMISSION_DENIED) {
+          showToast("Location access was denied. Please allow location access in your browser settings.", "warning");
+        } else {
+          showToast("Could not retrieve location. Please check your GPS signal.", "error");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   // Merge database user attributes with mock UI metrics
@@ -98,12 +157,12 @@ const UserProfile = () => {
               onClick={handleToggleGPS}
               className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold shadow-sm transition-colors active:scale-95 ${
                 gpsActive 
-                  ? 'bg-alert-red text-white hover:bg-red-600' 
+                  ? 'bg-primary-container text-on-primary-container hover:bg-primary-container/80' 
                   : 'bg-primary text-on-primary hover:bg-primary/90'
               }`}
             >
-              <span className="material-symbols-outlined text-[20px]">{gpsActive ? 'location_off' : 'my_location'}</span>
-              {gpsActive ? 'Stop GPS Broadcast' : 'Activate Live GPS'}
+              <span className="material-symbols-outlined text-[20px]">{gpsActive ? 'my_location' : 'location_disabled'}</span>
+              {gpsActive ? 'Update Live GPS' : 'Activate Live GPS'}
             </button>
             <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-bold bg-surface-container-high text-on-surface hover:bg-surface-container-highest transition-colors active:scale-95">
               <span className="material-symbols-outlined text-[20px]">edit</span>

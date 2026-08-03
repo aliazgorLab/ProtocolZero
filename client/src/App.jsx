@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import AppRoutes from './routes/AppRoutes';
 import { connectSocket, disconnectSocket } from './services/socket';
+import { ToastProvider } from './context/ToastContext';
 
 function App() {
   useEffect(() => {
@@ -12,7 +13,9 @@ function App() {
   }, []);
 
   return (
-    <AppRoutes />
+    <ToastProvider>
+      <AppRoutes />
+    </ToastProvider>
   );
 }
 

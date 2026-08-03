@@ -28,7 +28,7 @@ const Login = () => {
   const handleLogin = (e) => {
     e.preventDefault();
     if (!email || !password) return;
-    dispatch(loginUser({ email, password }));
+    dispatch(loginUser({ email, password, loginType: 'citizen' }));
   };
 
   const handleVerifyOtp = (e) => {

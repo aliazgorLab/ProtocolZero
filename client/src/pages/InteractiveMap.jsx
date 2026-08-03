@@ -1,8 +1,93 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
+import { useDispatch, useSelector } from 'react-redux';
+import { updateLiveLocation } from '../features/auth/authSlice';
+import { useToast } from '../context/ToastContext';
 
 const InteractiveMap = () => {
+  const dispatch = useDispatch();
+  const { showToast } = useToast();
+  const { user, isAuthenticated } = useSelector((state) => state.auth);
+
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState(null);
+
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+  });
+
+  const [mapCenter, setMapCenter] = useState(() => {
+    if (user?.gps?.coordinates) {
+      return {
+        lat: user.gps.coordinates[1],
+        lng: user.gps.coordinates[0],
+      };
+    }
+    return { lat: 22.3569, lng: 91.7832 }; // Chittagong
+  });
+
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+
+  const handleRecenter = () => {
+    if (!navigator.geolocation) {
+      showToast("Geolocation is not supported by your browser.", "warning");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setMapCenter({ lat, lng });
+        
+        if (isAuthenticated) {
+          const gps = {
+            type: "Point",
+            coordinates: [lng, lat]
+          };
+          try {
+            await dispatch(updateLiveLocation(gps)).unwrap();
+            showToast("GPS Location successfully updated and saved to your profile!", "success");
+          } catch (err) {
+            console.error("Failed to update live location:", err);
+            showToast("Location fetched, but failed to save to server.", "error");
+          }
+        } else {
+          showToast("GPS Location centered on map!", "info");
+        }
+      },
+      (error) => {
+        console.error("Location access denied or failed", error);
+        if (error.code === error.PERMISSION_DENIED) {
+          showToast("Location access was denied. Please allow location access in your browser settings.", "warning");
+        } else {
+          showToast("Could not retrieve location. Please check your GPS signal.", "error");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  useEffect(() => {
+    if (navigator.permissions) {
+      navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+        if (result.state === 'granted') {
+          handleRecenter();
+        } else if (result.state === 'prompt') {
+          setShowLocationPrompt(true);
+        }
+      });
+    } else {
+      setShowLocationPrompt(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleAllowLocation = () => {
+    setShowLocationPrompt(false);
+    handleRecenter();
+  };
 
   const toggleSheet = () => {
     setIsSheetOpen(!isSheetOpen);
@@ -27,17 +112,52 @@ const InteractiveMap = () => {
       onClick={handleMapClick}
     >
       {/* Background Map Image */}
-      <div 
-        className="absolute inset-0 z-0 bg-inverse-surface bg-cover bg-center" 
-        style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuBS_liabeneLgOyzFBkfEGFcbR1VaN10vceExLIQXNJlUrVLA2Ao1elEsbIk5zx0_n8wxZ_FgIM2tCjCBty4STrUaPGQRrz9diIhSvXVijIEPhDBKm-Lk1uY0TgkiV16F_7QvsKVXUQHmr___WQe5q4iYaBem0_j_9eaVHFQnSLO8gycpWk1pRV-B0irms9HM2iHRydecSmq4-erH0sfA4Y28s64KJFDMkoLJ2jt5nU61DEwV4pRO0q')" }}
-      ></div>
+      <div className="absolute inset-0 z-0 bg-inverse-surface">
+        {isLoaded ? (
+          <GoogleMap
+            mapContainerStyle={{ width: '100%', height: '100%' }}
+            center={mapCenter}
+            zoom={15}
+            options={{
+              disableDefaultUI: true,
+              zoomControl: false,
+              styles: [
+                { featureType: "all", elementType: "geometry.fill", stylers: [{ weight: "2.00" }] },
+                { featureType: "all", elementType: "geometry.stroke", stylers: [{ color: "#9c9c9c" }] },
+                { featureType: "all", elementType: "labels.text", stylers: [{ visibility: "on" }] },
+                { featureType: "landscape", elementType: "all", stylers: [{ color: "#f2f2f2" }] },
+                { featureType: "landscape", elementType: "geometry.fill", stylers: [{ color: "#ffffff" }] },
+                { featureType: "landscape.man_made", elementType: "geometry.fill", stylers: [{ color: "#ffffff" }] },
+                { featureType: "poi", elementType: "all", stylers: [{ visibility: "off" }] },
+                { featureType: "road", elementType: "all", stylers: [{ saturation: -100 }, { lightness: 45 }] },
+                { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#eeeeee" }] },
+                { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#7b7b7b" }] },
+                { featureType: "road", elementType: "labels.text.stroke", stylers: [{ color: "#ffffff" }] },
+                { featureType: "road.highway", elementType: "all", stylers: [{ visibility: "simplified" }] },
+                { featureType: "road.arterial", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+                { featureType: "transit", elementType: "all", stylers: [{ visibility: "off" }] },
+                { featureType: "water", elementType: "all", stylers: [{ color: "#46bcec" }, { visibility: "on" }] },
+                { featureType: "water", elementType: "geometry.fill", stylers: [{ color: "#c8d7d4" }] },
+                { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#070707" }] },
+                { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#ffffff" }] }
+              ]
+            }}
+          >
+            <Marker position={mapCenter} title="Your Location" />
+          </GoogleMap>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-on-surface-variant">
+            <span className="material-symbols-outlined animate-spin text-[40px]">progress_activity</span>
+          </div>
+        )}
+      </div>
 
       {/* Layer Overlay Controls */}
       <div className="absolute top-20 right-4 z-10 flex flex-col gap-2">
         <button className="w-12 h-12 rounded-xl bg-inverse-surface shadow-lg flex items-center justify-center text-primary-fixed-dim hover:bg-primary-container hover:text-on-primary-container transition-all active:scale-90">
           <span className="material-symbols-outlined">layers</span>
         </button>
-        <button className="w-12 h-12 rounded-xl bg-inverse-surface shadow-lg flex items-center justify-center text-on-surface-variant transition-all active:scale-90">
+        <button onClick={handleRecenter} className="w-12 h-12 rounded-xl bg-inverse-surface shadow-lg flex items-center justify-center text-on-surface-variant transition-all active:scale-90">
           <span className="material-symbols-outlined">my_location</span>
         </button>
         <button className="w-12 h-12 rounded-xl bg-inverse-surface shadow-lg flex items-center justify-center text-on-surface-variant transition-all active:scale-90">

@@ -21,7 +21,7 @@ export const loginUser = createAsyncThunk(
 
       const checkRes = await axiosInstance.post(
         '/auth/login-check',
-        {},
+        { loginType: credentials.loginType || 'citizen' },
         { headers: { Authorization: `Bearer ${idToken}` } },
       );
 
@@ -114,6 +114,29 @@ export const registerUser = createAsyncThunk(
       return rejectWithValue('Network error. Please check your connection.');
     }
   },
+);
+
+export const updateLiveLocation = createAsyncThunk(
+  'auth/updateLiveLocation',
+  async (gps, { getState, rejectWithValue }) => {
+    try {
+      const state = getState();
+      const token = state.auth.token;
+      if (!token) throw new Error('No token found');
+
+      const response = await axiosInstance.patch(
+        '/users/location',
+        { gps },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      return response.data.data;
+    } catch (error) {
+      if (error.response) {
+        return rejectWithValue(error.response.data.message || 'Location update failed.');
+      }
+      return rejectWithValue('Network error.');
+    }
+  }
 );
 
 const token = localStorage.getItem('token');
@@ -228,6 +251,10 @@ const authSlice = createSlice({
       .addCase(verifyOtp.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload || 'Verification failed.';
+      })
+      .addCase(updateLiveLocation.fulfilled, (state, action) => {
+        state.user = { ...state.user, ...action.payload };
+        localStorage.setItem('user', JSON.stringify(state.user));
       });
   },
 });

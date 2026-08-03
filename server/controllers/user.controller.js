@@ -153,15 +153,48 @@ exports.toggleTwoFactor = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Extra security layer (Email OTP) is now ${newStatus ? "ENABLED" : "DISABLED"}.`,
-      data: { twoFactorEnabled: newStatus },
+      message: `Email OTP 2FA is now ${user.twoFactorEnabled ? "ENABLED" : "DISABLED"}.`,
+      data: {
+        twoFactorEnabled: user.twoFactorEnabled,
+      },
     });
   } catch (error) {
     console.error("[ERROR] Toggle 2FA Failure:", error.message);
     return res.status(500).json({
       success: false,
-      message: "Internal server error while toggling security settings.",
+      message: "Internal server error while toggling 2FA setting.",
     });
   }
 };
 
+/**
+ * Updates the user's live GPS coordinates (when they click 'Recenter' or grant location).
+ */
+exports.updateLiveLocation = async (req, res) => {
+  try {
+    const { gps } = req.body;
+    const userId = req.user._id;
+
+    if (!gps || gps.type !== 'Point' || !Array.isArray(gps.coordinates) || gps.coordinates.length !== 2) {
+      return res.status(400).json({ success: false, message: "Invalid GPS coordinates." });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { gps },
+      { new: true, runValidators: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Live location updated successfully.",
+      data: updatedUser,
+    });
+  } catch (error) {
+    console.error("[ERROR] Update Live Location Failure:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while updating live location.",
+    });
+  }
+};
