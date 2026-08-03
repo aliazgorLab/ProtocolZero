@@ -82,7 +82,13 @@ const initializeSocket = (httpServer) => {
 
     ioInstance = new Server(httpServer, {
         cors: {
-            origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+            origin: (origin, callback) => {
+                if (!origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+                    callback(null, true);
+                } else {
+                    callback(null, true);
+                }
+            },
             credentials: true,
         },
     });

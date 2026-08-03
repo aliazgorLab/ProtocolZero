@@ -41,10 +41,16 @@ const ReportDetail = () => {
 
   const handleVote = async (voteType) => {
     try {
-      const res = await axiosInstance.patch(`/reports/${id}/vote`, { vote: voteType });
-      if (res.data?.data) {
-        setReport(res.data.data);
-        showToast(`Vote recorded!`, "success");
+      const res = await axiosInstance.patch(`/reports/${id}/vote`, {
+        type: voteType,
+        vote: voteType,
+      });
+      if (res.data) {
+        showToast("Vote recorded!", "success");
+        const updated = await axiosInstance.get(`/reports/${id}`);
+        if (updated.data?.data) {
+          setReport(updated.data.data);
+        }
       }
     } catch (err) {
       console.error("Failed to vote:", err);

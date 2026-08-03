@@ -33,6 +33,7 @@ const validateReportComment = [
 
 const validateReportVote = [
   body("type")
+    .customSanitizer((val, { req }) => val || req.body.vote)
     .exists({ checkFalsy: true })
     .withMessage("Vote type is required.")
     .isIn(["upvote", "downvote"])
@@ -44,14 +45,6 @@ const validateReportVote = [
     .trim()
     .isLength({ max: 500 })
     .withMessage("Comment must not exceed 500 characters."),
-  body("type").custom((value, { req }) => {
-    if (value === "downvote") {
-      if (!req.body.comment || !String(req.body.comment).trim()) {
-        throw new Error("Comment is required for downvotes.");
-      }
-    }
-    return true;
-  }),
   handleValidationErrors,
 ];
 

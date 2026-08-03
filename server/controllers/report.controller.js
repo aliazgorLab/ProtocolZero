@@ -337,6 +337,30 @@ exports.addReportComment = async (req, res) => {
 
     const createdComment = report.comments[report.comments.length - 1].toObject();
 
+    // --- DISPATCH COMMENT NOTIFICATION TO REPORT ISSUER ---
+    const issuerId = report.issuerId?._id ? report.issuerId._id.toString() : report.issuerId?.toString();
+    const commenterId = req.user._id.toString();
+
+    if (issuerId && issuerId !== commenterId) {
+      try {
+        const commenterName = req.user.name || "A user";
+        const snippet = text.length > 60 ? `${text.substring(0, 60)}...` : text;
+        const notification = await Notification.create({
+          recipientId: issuerId,
+          referenceId: report._id,
+          referenceModel: "Report",
+          type: "report_comment",
+          message: `${commenterName} commented on your report (${report.postId || report.category}): "${snippet}"`,
+        });
+
+        emitToRoom(`user:${issuerId}`, "notification:new", notification);
+      } catch (notifErr) {
+        console.error("[WARNING] Failed to dispatch comment notification:", notifErr.message);
+      }
+    }
+
+    emitReportToGeoRooms("report:update", report, buildLeanReportPayload(report));
+
     return res.status(201).json({
       success: true,
       message: "Comment added successfully.",
@@ -374,48 +398,73 @@ exports.voteOnReport = async (req, res) => {
     const alreadyUpvoted = upvoterIds.includes(voterId);
     const alreadyDownvoted = downvoterIds.includes(voterId);
 
-    if (type === "upvote") {
+    const voteType = type || req.body.vote;
+
+    if (voteType === "upvote") {
       if (alreadyUpvoted) {
-        return res.status(409).json({
-          success: false,
-          message: "You have already upvoted this report.",
-        });
-      }
-
-      if (alreadyDownvoted) {
-        report.vote.downvote = Math.max(0, report.vote.downvote - 1);
-        report.vote.downvoterId = report.vote.downvoterId.filter(
-          (userId) => userId.toString() !== voterId,
-        );
-      }
-
-      report.vote.upvote += 1;
-      report.vote.upvoterId.push(req.user._id);
-    }
-
-    if (type === "downvote") {
-      if (alreadyDownvoted) {
-        return res.status(409).json({
-          success: false,
-          message: "You have already downvoted this report.",
-        });
-      }
-
-      if (alreadyUpvoted) {
+        // Toggle off upvote
         report.vote.upvote = Math.max(0, report.vote.upvote - 1);
         report.vote.upvoterId = report.vote.upvoterId.filter(
           (userId) => userId.toString() !== voterId,
         );
+      } else {
+        if (alreadyDownvoted) {
+          report.vote.downvote = Math.max(0, report.vote.downvote - 1);
+          report.vote.downvoterId = report.vote.downvoterId.filter(
+            (userId) => userId.toString() !== voterId,
+          );
+        }
+        report.vote.upvote += 1;
+        report.vote.upvoterId.push(req.user._id);
       }
+    }
 
-      report.vote.downvote += 1;
-      report.vote.downvoterId.push(req.user._id);
+    if (voteType === "downvote") {
+      if (alreadyDownvoted) {
+        // Toggle off downvote
+        report.vote.downvote = Math.max(0, report.vote.downvote - 1);
+        report.vote.downvoterId = report.vote.downvoterId.filter(
+          (userId) => userId.toString() !== voterId,
+        );
+      } else {
+        if (alreadyUpvoted) {
+          report.vote.upvote = Math.max(0, report.vote.upvote - 1);
+          report.vote.upvoterId = report.vote.upvoterId.filter(
+            (userId) => userId.toString() !== voterId,
+          );
+        }
+        report.vote.downvote += 1;
+        report.vote.downvoterId.push(req.user._id);
 
-      report.comments.push({
-        commenterId: req.user._id,
-        text: comment.trim(),
-        createdAt: new Date(),
-      });
+        if (comment && String(comment).trim()) {
+          const commentText = String(comment).trim();
+          report.comments.push({
+            commenterId: req.user._id,
+            text: commentText,
+            createdAt: new Date(),
+          });
+
+          // Dispatch comment notification to report issuer
+          const issuerId = report.issuerId?._id ? report.issuerId._id.toString() : report.issuerId?.toString();
+          if (issuerId && issuerId !== voterId) {
+            try {
+              const commenterName = req.user.name || "A user";
+              const snippet = commentText.length > 60 ? `${commentText.substring(0, 60)}...` : commentText;
+              const notification = await Notification.create({
+                recipientId: issuerId,
+                referenceId: report._id,
+                referenceModel: "Report",
+                type: "report_comment",
+                message: `${commenterName} commented on your report (${report.postId || report.category}): "${snippet}"`,
+              });
+
+              emitToRoom(`user:${issuerId}`, "notification:new", notification);
+            } catch (notifErr) {
+              console.error("[WARNING] Failed to dispatch downvote comment notification:", notifErr.message);
+            }
+          }
+        }
+      }
     }
 
     await report.save();
