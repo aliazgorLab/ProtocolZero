@@ -20,11 +20,23 @@ const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 
 const sanitize = require("./middleware/sanitize");
+const validateUploadedMedia = require("./middleware/uploadValidator");
+const rateLimit = require("express-rate-limit");
 
-app.use(helmet());
+// --- Security & Hardening Middleware ---
+app.disable("x-powered-by");
+
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: false, // Prevents blocking embedded maps or external media assets
+  })
+);
+
 app.use(
   cors({
     origin: (origin, callback) => {
+      // Allow localhost/127.0.0.1 in development or server-to-server calls
       if (!origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
         callback(null, true);
       } else {
@@ -32,11 +44,29 @@ app.use(
       }
     },
     credentials: true,
-  }),
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  })
 );
+
+// Global API Rate Limiter (300 requests per 15 minutes per IP)
+const globalApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many requests sent from this IP address. Please try again after 15 minutes.",
+  },
+});
+app.use("/api/", globalApiLimiter);
+
 app.use(express.json({ limit: "50mb" })); // Parses incoming JSON payloads up to 50mb
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
-app.use(sanitize); // Sanitize inputs globally
+app.use(sanitize); // Sanitize NoSQL inputs globally ($ and . stripping)
+app.use(validateUploadedMedia); // Sanitize and validate Base64 file/media uploads
+
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/reports", reportRoutes);
