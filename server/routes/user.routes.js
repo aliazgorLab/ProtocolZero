@@ -27,7 +27,7 @@ const rejectUnexpectedAddressFields = (req, res, next) => {
 
 const validateGpsPoint = (value, { path }) => {
   if (value === undefined || value === null) return true; // Optional
-  
+
   if (typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${path} must be a GeoJSON Point object.`);
   }

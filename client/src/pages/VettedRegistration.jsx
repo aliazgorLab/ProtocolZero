@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 const VettedRegistration = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Form State
   const [formData, setFormData] = useState({
     name: '',
@@ -38,7 +38,7 @@ const VettedRegistration = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     // UI-only flow for now
     setTimeout(() => {
       setIsSubmitting(false);
@@ -79,18 +79,18 @@ const VettedRegistration = () => {
             Submit your credentials to join the Protocol Zero network as a Reporter or Response Team member. Your application will be manually reviewed by administrators.
           </p>
         </div>
-        
+
         {/* Registration Form Bento Card */}
         <div className="bg-white border-t-[4px] border-tertiary rounded-xl shadow-xl p-6 lg:p-10 relative z-10">
           <form className="space-y-10" id="vettedSignupForm" onSubmit={handleSubmit}>
-            
+
             {/* Section 1: Personal Identity */}
             <div className="space-y-5">
               <div className="flex items-center gap-3 border-b border-outline-variant/40 pb-2">
                 <span className="material-symbols-outlined text-tertiary text-2xl">person_pin</span>
                 <h3 className="text-xl font-bold text-on-surface">Personal Identity</h3>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-1.5 group">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1 group-focus-within:text-tertiary transition-colors" htmlFor="name">Full Legal Name</label>
@@ -99,7 +99,7 @@ const VettedRegistration = () => {
                     <input className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-transparent rounded-lg text-base focus:ring-2 focus:ring-tertiary focus:border-transparent transition-all outline-none" id="name" name="name" value={formData.name} onChange={handleInputChange} placeholder="John Doe" type="text" required />
                   </div>
                 </div>
-                
+
                 <div className="space-y-1.5 group">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1 group-focus-within:text-tertiary transition-colors" htmlFor="phone">Mobile Phone Number</label>
                   <div className="relative flex items-center">
@@ -108,7 +108,7 @@ const VettedRegistration = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-1.5 group">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1 group-focus-within:text-tertiary transition-colors" htmlFor="email">Official Work Email</label>
@@ -126,19 +126,19 @@ const VettedRegistration = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Section 2: Duty & Station */}
             <div className="space-y-5 pt-2">
               <div className="flex items-center gap-3 border-b border-outline-variant/40 pb-2">
                 <span className="material-symbols-outlined text-tertiary text-2xl">local_police</span>
                 <h3 className="text-xl font-bold text-on-surface">Duty & Station</h3>
               </div>
-              
+
               <div className="space-y-1.5 group">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1 group-focus-within:text-tertiary transition-colors" htmlFor="role">Professional Role</label>
                 <div className="relative flex items-center">
                   <span className="material-symbols-outlined absolute left-3 text-outline text-[20px] group-focus-within:text-tertiary transition-colors">work</span>
-                  <select 
+                  <select
                     id="role"
                     name="role"
                     value={formData.role}
@@ -155,7 +155,7 @@ const VettedRegistration = () => {
                   <span className="material-symbols-outlined absolute right-3 pointer-events-none text-outline">expand_more</span>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-1.5 group">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1 group-focus-within:text-tertiary transition-colors" htmlFor="officeName">Office / Precinct Name</label>
@@ -164,7 +164,7 @@ const VettedRegistration = () => {
                     <input className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-transparent rounded-lg text-base focus:ring-2 focus:ring-tertiary focus:border-transparent transition-all outline-none" id="officeName" name="officeName" value={formData.officeName} onChange={handleInputChange} placeholder="Central Precinct 04" type="text" required />
                   </div>
                 </div>
-                
+
                 <div className="space-y-1.5 group">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1 group-focus-within:text-tertiary transition-colors" htmlFor="officeAddress">Primary Office Address</label>
                   <div className="relative flex items-center">
@@ -174,14 +174,14 @@ const VettedRegistration = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Section 3: Document Verification */}
             <div className="space-y-5 pt-2">
               <div className="flex items-center gap-3 border-b border-outline-variant/40 pb-2">
                 <span className="material-symbols-outlined text-tertiary text-2xl">fingerprint</span>
                 <h3 className="text-xl font-bold text-on-surface">Identity Verification Assets</h3>
               </div>
-              
+
               <div className="space-y-1.5 group">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1 group-focus-within:text-tertiary transition-colors" htmlFor="nid">National ID (NID) Number</label>
                 <div className="relative flex items-center">
@@ -189,14 +189,14 @@ const VettedRegistration = () => {
                   <input className="w-full pl-10 pr-4 py-3 bg-surface-container-low border border-transparent rounded-lg text-base focus:ring-2 focus:ring-tertiary focus:border-transparent transition-all outline-none font-mono" id="nid" name="nid" value={formData.nid} onChange={handleInputChange} placeholder="ABC-12345-X" type="text" required />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Face Upload */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1">Live Face Photo</label>
                   <div className="group/file relative w-full h-24 bg-surface-container-lowest border-2 border-dashed border-outline-variant hover:border-tertiary hover:bg-tertiary/5 rounded-xl transition-all flex flex-col items-center justify-center cursor-pointer overflow-hidden">
                     <input className="absolute inset-0 opacity-0 cursor-pointer z-10" id="face_photo" type="file" accept="image/*" onChange={(e) => handleFileChange(e, setFaceImage)} required />
-                    
+
                     {faceImage ? (
                       <div className="flex flex-col items-center gap-1 text-tertiary z-0">
                         <span className="material-symbols-outlined text-[28px]">check_circle</span>
@@ -216,7 +216,7 @@ const VettedRegistration = () => {
                   <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1">Official NID Document</label>
                   <div className="group/file relative w-full h-24 bg-surface-container-lowest border-2 border-dashed border-outline-variant hover:border-tertiary hover:bg-tertiary/5 rounded-xl transition-all flex flex-col items-center justify-center cursor-pointer overflow-hidden">
                     <input className="absolute inset-0 opacity-0 cursor-pointer z-10" id="nid_photo" type="file" accept="image/*" onChange={(e) => handleFileChange(e, setNidImage)} required />
-                    
+
                     {nidImage ? (
                       <div className="flex flex-col items-center gap-1 text-tertiary z-0">
                         <span className="material-symbols-outlined text-[28px]">check_circle</span>
@@ -239,7 +239,7 @@ const VettedRegistration = () => {
                 <span className="material-symbols-outlined text-tertiary text-2xl">lock</span>
                 <h3 className="text-xl font-bold text-on-surface">Account Security</h3>
               </div>
-              
+
               <div className="space-y-1.5 group">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant ml-1 group-focus-within:text-tertiary transition-colors" htmlFor="password">Create Secure Passcode</label>
                 <div className="relative flex items-center">
@@ -251,15 +251,14 @@ const VettedRegistration = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Submit Action */}
             <div className="pt-6 border-t border-outline-variant/40 flex flex-col items-center gap-4">
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={isSubmitting}
-                className={`w-full py-4 text-on-tertiary text-lg font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 ${
-                  isSubmitting ? 'opacity-80 pointer-events-none bg-tertiary/70' : 'bg-tertiary hover:brightness-110 active:scale-[0.98]'
-                }`}
+                className={`w-full py-4 text-on-tertiary text-lg font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-80 pointer-events-none bg-tertiary/70' : 'bg-tertiary hover:brightness-110 active:scale-[0.98]'
+                  }`}
               >
                 {isSubmitting ? (
                   <>
@@ -273,7 +272,7 @@ const VettedRegistration = () => {
                   </>
                 )}
               </button>
-              
+
               <p className="text-xs font-medium text-on-surface-variant text-center max-w-lg">
                 By submitting this form, you acknowledge that providing false institutional credentials is a federal offense. Review the <Link className="text-tertiary font-bold hover:underline" to="#">Terms of Service</Link>.
               </p>

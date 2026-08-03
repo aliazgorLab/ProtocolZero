@@ -121,7 +121,7 @@ let user = null;
 try {
   const stored = localStorage.getItem('user');
   if (stored) user = JSON.parse(stored);
-} catch {}
+} catch { }
 
 const initialState = {
   user,
