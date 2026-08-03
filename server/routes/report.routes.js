@@ -20,6 +20,7 @@ router.get("/nearby", reportController.getNearbyReports);
 router.get("/:id", reportController.getReportById);
 router.post("/:id/comment", validateReportComment, reportController.addReportComment);
 router.post("/:id/victim", validateVictimRegistration, reportController.registerVictim);
+router.delete("/:id/victim", reportController.detachVictim);
 router.patch("/:id/vote", validateReportVote, reportController.voteOnReport);
 router.patch("/:id/close", reportController.closeReport);
 router.patch("/:id/resources-needed", reportController.updateResourcesNeeded);

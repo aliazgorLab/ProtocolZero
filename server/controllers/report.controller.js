@@ -582,6 +582,63 @@ exports.registerVictim = async (req, res) => {
   }
 };
 
+// @desc    Detach current user from victim status on a report (Mark Self Safe)
+// @route   DELETE /api/reports/:id/victim
+// @access  Protected
+exports.detachVictim = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const { id } = req.params;
+    const userId = req.user._id;
+
+    const report = await reportService.resolveReportById(id);
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        message: "Report not found.",
+      });
+    }
+
+    await session.withTransaction(async () => {
+      await User.updateOne(
+        { _id: userId },
+        { $set: { victimReportID: null } },
+        { session }
+      );
+
+      await Report.updateOne(
+        { _id: report._id },
+        { $pull: { victims: { userId: userId } } },
+        { session }
+      );
+    });
+
+    const updatedReport = await reportService.resolveReportById(id)
+      .populate("issuerId", "name accountType face")
+      .populate("comments.commenterId", "name accountType face")
+      .populate(
+        "victims.userId",
+        "name accountType face currentAddress homeAddress gps phone email"
+      );
+
+    return res.status(200).json({
+      success: true,
+      message: "You have been marked safe and detached from victim status.",
+      data: updatedReport,
+    });
+  } catch (error) {
+    console.error("[ERROR] Victim Detach Failure:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to detach from victim status.",
+    });
+  } finally {
+    session.endSession();
+  }
+};
+
 // @desc    Edit/Update an existing report
 // @route   PATCH /api/reports/:id
 // @access  Protected

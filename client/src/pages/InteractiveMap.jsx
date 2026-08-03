@@ -191,7 +191,7 @@ const InteractiveMap = () => {
                     title={`${report.category}: ${report.description}`}
                     label={{
                       text: report.category || 'INCIDENT',
-                      color: '#FFFFFF',
+                      color: '#000000',
                       fontWeight: 'bold',
                       fontSize: '11px',
                     }}

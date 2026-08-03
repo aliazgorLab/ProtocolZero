@@ -118,13 +118,19 @@ const ResponseTeamDash = () => {
                       className="p-4 rounded-xl border border-outline-variant/30 bg-surface-container-lowest flex flex-col md:flex-row justify-between items-start md:items-center gap-3"
                     >
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
                           <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
                             incident.type === 'major' ? 'bg-alert-red text-white' : 'bg-primary-container text-on-primary-container'
                           }`}>
                             {incident.type === 'major' ? 'MAJOR DISASTER' : 'MINOR'}
                           </span>
                           <span className="font-bold text-on-surface text-sm">{incident.category}</span>
+                          {Array.isArray(incident.victims) && incident.victims.length > 0 && (
+                            <span className="bg-alert-red/10 text-alert-red border border-alert-red/30 text-[10px] font-bold uppercase px-2 py-0.5 rounded flex items-center gap-1 animate-pulse">
+                              <span className="material-symbols-outlined text-xs">sos</span>
+                              {incident.victims.length} VICTIM{incident.victims.length > 1 ? 'S' : ''}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-on-surface-variant line-clamp-2">{incident.description}</p>
                       </div>

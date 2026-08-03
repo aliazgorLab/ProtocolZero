@@ -149,7 +149,7 @@ const Home = () => {
                       title={report.category || 'Incident'}
                       label={{
                         text: report.category || 'INCIDENT',
-                        color: '#FFFFFF',
+                        color: '#000000',
                         fontWeight: 'bold',
                         fontSize: '10px'
                       }}

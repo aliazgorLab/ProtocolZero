@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import axiosInstance from '../api/axiosInstance';
 import { useToast } from '../context/ToastContext';
+import { updateUser } from '../features/auth/authSlice';
 
 const ReportDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { showToast } = useToast();
   const { user: currentUser } = useSelector((state) => state.auth);
 
@@ -14,6 +16,7 @@ const ReportDetail = () => {
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [submittingVictim, setSubmittingVictim] = useState(false);
 
   useEffect(() => {
     const fetchReportDetail = async () => {
@@ -69,6 +72,65 @@ const ReportDetail = () => {
     }
   };
 
+  const handleAttachVictim = async () => {
+    setSubmittingVictim(true);
+
+    const submitVictimPayload = async (payload) => {
+      try {
+        const res = await axiosInstance.post(`/reports/${id}/victim`, payload);
+        if (res.data?.data) {
+          setReport(res.data.data);
+          dispatch(updateUser({ victimReportID: report._id }));
+          showToast("You have been attached as a victim to this incident.", "success");
+        }
+      } catch (err) {
+        console.error("Victim registration failed:", err);
+        showToast(err.response?.data?.message || "Failed to attach as victim.", "error");
+      } finally {
+        setSubmittingVictim(false);
+      }
+    };
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const payload = {
+            gpsStatus: "success",
+            gps: {
+              type: "Point",
+              coordinates: [pos.coords.longitude, pos.coords.latitude]
+            }
+          };
+          submitVictimPayload(payload);
+        },
+        (err) => {
+          console.warn("GPS acquire failed, attempting fallback:", err);
+          submitVictimPayload({ gpsStatus: "failed" });
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    } else {
+      submitVictimPayload({ gpsStatus: "failed" });
+    }
+  };
+
+  const handleDetachVictim = async () => {
+    try {
+      setSubmittingVictim(true);
+      const res = await axiosInstance.delete(`/reports/${id}/victim`);
+      if (res.data?.data) {
+        setReport(res.data.data);
+        dispatch(updateUser({ victimReportID: null }));
+        showToast("You have been marked safe and detached from this report.", "success");
+      }
+    } catch (err) {
+      console.error("Failed to detach victim:", err);
+      showToast(err.response?.data?.message || "Failed to detach from victim status.", "error");
+    } finally {
+      setSubmittingVictim(false);
+    }
+  };
+
   const handleBack = () => {
     navigate(-1);
   };
@@ -99,6 +161,15 @@ const ReportDetail = () => {
   const upvotes = report.vote?.upvote || 0;
   const downvotes = report.vote?.downvote || 0;
   const netScore = upvotes - downvotes;
+
+  const currentUserIdStr = currentUser?._id?.toString();
+  const isAttachedToThisReport = Array.isArray(report.victims) && report.victims.some(v => {
+    const vId = v.userId?._id ? v.userId._id.toString() : v.userId?.toString();
+    return vId === currentUserIdStr;
+  });
+
+  const isAttachedToOtherReport = currentUser?.victimReportID && currentUser.victimReportID.toString() !== report._id?.toString();
+  const isVettedResponder = ['Reporter', 'ResponseTeam', 'Admin', 'SuperAdmin'].includes(currentUser?.accountType);
 
   return (
     <div className="min-h-screen bg-background text-on-background pb-24 pt-14">
@@ -203,6 +274,130 @@ const ReportDetail = () => {
                   </button>
                 </div>
               </div>
+            </div>
+          </article>
+
+          {/* Victim Registration & Rescue Roster Section */}
+          <article className="rounded-3xl border border-alert-red/30 bg-surface p-6 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between gap-4 mb-4 pb-3 border-b border-outline-variant/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-alert-red/10 text-alert-red flex items-center justify-center">
+                  <span className="material-symbols-outlined text-2xl">sos</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-on-surface">Victim & Emergency Support</h3>
+                  <p className="text-xs text-on-surface-variant">Live telemetry and affected citizen attachment roster</p>
+                </div>
+              </div>
+              <span className="rounded-full bg-alert-red/10 text-alert-red px-3 py-1 text-xs font-bold">
+                {report.victims?.length || 0} Affected
+              </span>
+            </div>
+
+            {/* Victim Status Action Box */}
+            <div className="mb-6 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-5">
+              {isAttachedToThisReport ? (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-emerald-500 text-3xl">check_circle</span>
+                    <div>
+                      <p className="text-sm font-bold text-emerald-600">You Are Registered as a Victim</p>
+                      <p className="text-xs text-on-surface-variant">Emergency responders have been alerted to your position.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={submittingVictim}
+                    onClick={handleDetachVictim}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-emerald-700 active:scale-95 disabled:opacity-50 shrink-0"
+                  >
+                    {submittingVictim ? 'Processing...' : 'Mark Myself Safe'}
+                  </button>
+                </div>
+              ) : isAttachedToOtherReport ? (
+                <div className="flex items-center gap-3 text-amber-600">
+                  <span className="material-symbols-outlined text-2xl">warning</span>
+                  <p className="text-xs font-semibold">You are currently registered as a victim on another active incident report.</p>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold text-on-surface">Are you trapped or in immediate danger at this location?</p>
+                    <p className="text-xs text-on-surface-variant">Attach yourself to send your live GPS and contact info directly to response teams.</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={submittingVictim || report.status === 'closed'}
+                    onClick={handleAttachVictim}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-alert-red px-6 py-3 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-alert-red/90 active:scale-95 disabled:opacity-50 shrink-0 shadow-lg shadow-alert-red/20"
+                  >
+                    {submittingVictim ? 'Attaching...' : 'I Am A Victim (Attach Me)'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Victim Roster */}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3">Registered Victims Roster</p>
+              {(!report.victims || report.victims.length === 0) ? (
+                <p className="text-xs text-on-surface-variant text-center py-6 bg-surface-container-lowest rounded-2xl border border-outline-variant/20">
+                  No victims currently registered on this report.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {report.victims.map((victim, idx) => {
+                    const victimUser = victim.userId || {};
+                    const gpsSuccess = victim.gpsStatus === 'success';
+
+                    return (
+                      <div key={victim._id || idx} className="rounded-2xl border border-outline-variant/20 bg-surface-container-lowest p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-alert-red/10 text-alert-red flex items-center justify-center font-bold">
+                              <span className="material-symbols-outlined text-xl">person_pin</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-on-surface">{victimUser.name || 'Victim'}</p>
+                              <p className="text-xs text-on-surface-variant">{victimUser.accountType || 'Citizen'}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                              gpsSuccess ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
+                            }`}>
+                              GPS: {victim.gpsStatus || 'Active'} {victim.gpsFallback ? '(Fallback)' : ''}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Extended Details for Vetted Responders */}
+                        {isVettedResponder && (
+                          <div className="mt-3 pt-3 border-t border-outline-variant/20 grid gap-2 sm:grid-cols-2 text-xs font-mono text-on-surface-variant">
+                            <div>
+                              <span className="font-bold text-on-surface">Phone:</span> {victimUser.phone || 'N/A'}
+                            </div>
+                            <div>
+                              <span className="font-bold text-on-surface">Email:</span> {victimUser.email || 'N/A'}
+                            </div>
+                            {victimUser.gps?.coordinates && (
+                              <div className="sm:col-span-2">
+                                <span className="font-bold text-on-surface">Coordinates:</span> [{victimUser.gps.coordinates[1]}, {victimUser.gps.coordinates[0]}]
+                              </div>
+                            )}
+                            {victimUser.homeAddress && (
+                              <div className="sm:col-span-2">
+                                <span className="font-bold text-on-surface">Home Address:</span> {victimUser.homeAddress}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </article>
         </section>
